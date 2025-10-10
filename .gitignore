@@ -1,0 +1,4 @@
+*.swp
+namer.hpp
+.julia
+.juliaup
