@@ -1,6 +1,6 @@
-using FileNamer
+using TimestampedPaths
 using Test
 
-@testset "FileNamer.jl" begin
+@testset "TimestampedPaths.jl" begin
     @test greet("world") == "Hello, world!"
 end

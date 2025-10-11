@@ -1,4 +1,4 @@
-name = "FileNamer"
+name = "TimestampedPaths"
 uuid = "ef946245-2123-4c5d-86bd-2dd9af640e77"
 authors = ["Ashley"]
 version = "0.1.0"
