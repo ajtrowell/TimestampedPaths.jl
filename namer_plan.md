@@ -32,11 +32,14 @@
   - Guard with `mkpath` and handle concurrent creation by wrapping in `try`; ignore `EEXIST`.
 - `create_next_output_directory!(...)`:
   - Helper for multi-host scenarios; increments index state, materializes the folder, and returns the new path.
+  - Treat existing directories as success so concurrent creators converge without hard errors.
 
 ## Index Management
 - Maintain mutable state via `TimestampedPaths.IndexState`:
   - Fields: `current::Int`, `last_scanned::Union{Nothing,Dates.Date}` etc.
-  - `refresh_index!(state, config; now=Dates.now())` scans filesystem to recalc highest index only when date changes or caller requests.
+  - `refresh_index!(state, config; now=Dates.now(), force::Bool=false)` scans filesystem to recalc highest index; `force=true` guarantees a rescan even when the date has not rolled.
+  - `refresh_index!` updates `state.current` to the highest observed index so collaborators can attach to an existing directory without incrementing.
+  - `sync_to_latest_index!(state, config; now=Dates.now())` convenience wrapper that calls `refresh_index!` with `force=true`.
   - `increment_index!(state)` increments manually; caller decides when logical collection is complete.
 - Determine initial index on load by scanning target directory once (`highest_index`).
 
@@ -56,6 +59,7 @@
 - `TimestampedPaths.ensure_collection_path!(config, state; now=Dates.now())`
 - `TimestampedPaths.increment_index!(state)`
 - `TimestampedPaths.create_next_output_directory!(config, state; now=Dates.now())`
+- `TimestampedPaths.sync_to_latest_index!(state, config; now=Dates.now())`
 - `TimestampedPaths.host_name()` / `TimestampedPaths.timestamp(...)`
 
 ## Testing Strategy
@@ -66,6 +70,10 @@
   - `create_next_output_directory!` only touching filesystem when invoked.
 - Integration-style test that simulates multi-machine scenario by racing `ensure_collection_path!` calls (use temporary dirs).
 
+## Multi-System Coordination Scenario
+- Coordinate shared network-drive writes by designating a primary host to call `create_next_output_directory!`, then broadcast the resulting index.
+- Secondary hosts invoke `sync_to_latest_index!` (or `refresh_index!(; force=true)`) after the broadcast to align `state.current` with the on-disk highest index and write into the shared folder.
+- For resilience, allow every host to attempt `create_next_output_directory!`; those that lose the race will see the directory already present, treat it as success, rescan with `sync_to_latest_index!`, and still share the same collection directory.
 ## Resolved Decisions
 - Index digit placeholders use `#`; no additional symbol support planned for v1.
 - Date-based folder component is required and always derived from the timestamp template output.
