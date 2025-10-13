@@ -11,6 +11,7 @@ using TimestampedPaths
                         extension=".dat",
                         suffix="host",
                         start_index=1)
+        @test config.subfolder_template === nothing
         @test config.index_width == 2
         @test config.intermediate_prefix == "run_"
         @test config.intermediate_suffix == ""
@@ -31,6 +32,11 @@ end
         @test config.intermediate_prefix == "phase_"
 
         now = DateTime(2024, 1, 1, 12, 0, 0)
+        set_subfolder_template!(config, "yyyymmdd")
+        state = IndexState(config; now=now)
+        @test endswith(current_collection_path(config, state), joinpath("20240101", "phase_01"))
+
+        set_subfolder_template!(config, nothing)
         state = IndexState(config; now=now)
         @test endswith(current_collection_path(config, state), joinpath("2024-01-01", "phase_01"))
 
@@ -41,6 +47,7 @@ end
         @test endswith(current_collection_path(config, state), joinpath("2024-01-01", "special"))
 
         set_intermediate_template!(config, nothing)
+        set_subfolder_template!(config, nothing)
         state = IndexState(config; now=now)
         @test config.intermediate_template === nothing
         @test config.index_width === nothing
@@ -53,6 +60,27 @@ end
         set_intermediate_template!(config, "batch_###"; index_width=3)
         state = IndexState(config; now=now)
         @test endswith(current_collection_path(config, state), joinpath("2024-01-01", "batch_001"))
+    end
+end
+
+@testset "Subfolder template override" begin
+    mktempdir() do root
+        config = Config(root_dir=root,
+                        timestamp_template="yyyy-mm-dd_HHMMSS",
+                        subfolder_template="yyyymmdd",
+                        intermediate_template="run_##",
+                        extension="bin",
+                        start_index=1)
+        now = DateTime(2024, 5, 25, 10, 30, 0)
+        state = IndexState(config; now=now)
+
+        path = current_collection_path(config, state)
+        @test endswith(path, joinpath("20240525", "run_01"))
+        @test !occursin("2024-05-25", path)
+
+        ensured = ensure_collection_path!(config, state; now=now)
+        @test ensured == path
+        @test isdir(ensured)
     end
 end
 

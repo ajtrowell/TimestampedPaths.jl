@@ -1,4 +1,8 @@
 *.swp
 namer.hpp
 .julia
+.julia_depot
 .juliaup
+
+Manifest.toml
+

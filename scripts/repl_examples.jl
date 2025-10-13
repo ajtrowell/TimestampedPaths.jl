@@ -52,3 +52,8 @@ Suggested experiments:
 
 Use Ctrl+D (or exit()) to leave the REPL.
 """)
+
+
+function write_to_file(filename::String, msg::AbstractString = "File write")
+    open((io)->write(io, msg), filename, "w")
+end

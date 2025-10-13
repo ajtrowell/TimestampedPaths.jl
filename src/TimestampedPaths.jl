@@ -18,6 +18,7 @@ export Config,
        set_log_level!,
        log_info,
        log_debug,
+       set_subfolder_template!,
        set_intermediate_template!
 
 const _LOG_LEVEL = Ref{LogLevel}(Logging.Warn)
@@ -41,6 +42,7 @@ end
 mutable struct Config
     root_dir::String
     timestamp_template::String
+    subfolder_template::Union{Nothing,String}
     intermediate_template::Union{Nothing,String}
     extension::String
     suffix::Union{Nothing,String}
@@ -53,6 +55,7 @@ end
 
 function Config(; root_dir::AbstractString,
                  timestamp_template::AbstractString,
+                 subfolder_template::Union{Nothing,AbstractString}=nothing,
                  intermediate_template::Union{Nothing,AbstractString}=nothing,
                  extension::AbstractString="",
                  suffix::Union{Nothing,AbstractString}=nothing,
@@ -63,6 +66,7 @@ function Config(; root_dir::AbstractString,
 
     root = abspath(String(root_dir))
     ts_template = String(timestamp_template)
+    subfolder_value = subfolder_template === nothing ? nothing : String(subfolder_template)
     inter_template = intermediate_template === nothing ? nothing : String(intermediate_template)
     ext = _normalize_extension(String(extension))
     suffix_value = suffix === nothing ? nothing : String(suffix)
@@ -73,6 +77,7 @@ function Config(; root_dir::AbstractString,
 
     return Config(root,
                   ts_template,
+                  subfolder_value,
                   inter_template,
                   ext,
                   suffix_value,
@@ -100,6 +105,11 @@ function set_intermediate_template!(config::Config,
     config.placeholder_range = metadata.placeholder_range
     config.intermediate_prefix = metadata.intermediate_prefix
     config.intermediate_suffix = metadata.intermediate_suffix
+    return config
+end
+
+function set_subfolder_template!(config::Config, template::Union{Nothing,AbstractString})
+    config.subfolder_template = template === nothing ? nothing : String(template)
     return config
 end
 
@@ -349,8 +359,11 @@ end
 
 function _date_folder_component(config::Config, date::Date)
     dt = DateTime(date)
-    ts = timestamp(dt, config.timestamp_template)
-    return _extract_date_component(ts)
+    if config.subfolder_template === nothing
+        ts = timestamp(dt, config.timestamp_template)
+        return _extract_date_component(ts)
+    end
+    return timestamp(dt, config.subfolder_template::String)
 end
 
 function _extract_date_component(ts::String)
