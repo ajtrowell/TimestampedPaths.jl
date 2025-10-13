@@ -9,7 +9,7 @@ using Pkg
 Pkg.add(url="https://github.com/ashley/TimestampedPaths.jl")
 ```
 
-The package is lightweight and only depends on the Julia standard library (`Dates`, `Logging`, and `Sockets`).
+The package is lightweight and only depends on the Julia standard library (`Dates` and `Logging`).
 
 ## Core ideas
 

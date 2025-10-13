@@ -2,11 +2,9 @@ module TimestampedPaths
 
 using Dates
 using Logging
-using Sockets
 
 export Config,
        IndexState,
-       host_name,
        timestamp,
        current_collection_path,
        ensure_collection_path!,
@@ -122,8 +120,6 @@ function IndexState(config::Config; now::Dates.AbstractDateTime=Dates.now())
 end
 
 timestamp(dt::Dates.AbstractDateTime, template::AbstractString) = Dates.format(dt, template)
-
-host_name() = gethostname()
 
 """
     current_collection_path(config::Config, state::IndexState) -> String
