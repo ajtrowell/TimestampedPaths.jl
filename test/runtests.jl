@@ -18,6 +18,44 @@ using TimestampedPaths
     end
 end
 
+@testset "Config mutability" begin
+    mktempdir() do root
+        config = Config(root_dir=root,
+                        timestamp_template="yyyy-mm-dd_HHMMSS",
+                        intermediate_template="run_##",
+                        extension=".dat")
+
+        set_intermediate_template!(config, "phase_##")
+        @test config.intermediate_template == "phase_##"
+        @test config.index_width == 2
+        @test config.intermediate_prefix == "phase_"
+
+        now = DateTime(2024, 1, 1, 12, 0, 0)
+        state = IndexState(config; now=now)
+        @test endswith(current_collection_path(config, state), joinpath("2024-01-01", "phase_01"))
+
+        set_intermediate_template!(config, "special")
+        state = IndexState(config; now=now)
+        @test config.index_width === nothing
+        @test config.placeholder_range === nothing
+        @test endswith(current_collection_path(config, state), joinpath("2024-01-01", "special"))
+
+        set_intermediate_template!(config, nothing)
+        state = IndexState(config; now=now)
+        @test config.intermediate_template === nothing
+        @test config.index_width === nothing
+        @test !occursin("special", current_collection_path(config, state))
+        @test current_collection_path(config, state) == joinpath(config.root_dir, "2024-01-01")
+
+        @test_throws ArgumentError set_intermediate_template!(config, "phase_##"; index_width=3)
+        @test_throws ArgumentError set_intermediate_template!(config, nothing; index_width=2)
+
+        set_intermediate_template!(config, "batch_###"; index_width=3)
+        state = IndexState(config; now=now)
+        @test endswith(current_collection_path(config, state), joinpath("2024-01-01", "batch_001"))
+    end
+end
+
 @testset "Path generation and directory lifecycle" begin
     mktempdir() do root
         config = Config(root_dir=root,

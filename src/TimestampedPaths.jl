@@ -17,7 +17,8 @@ export Config,
        sync_to_latest_index!,
        set_log_level!,
        log_info,
-       log_debug
+       log_debug,
+       set_intermediate_template!
 
 const _LOG_LEVEL = Ref{LogLevel}(Logging.Warn)
 
@@ -37,7 +38,7 @@ function log_debug(msg)
     return nothing
 end
 
-struct Config
+mutable struct Config
     root_dir::String
     timestamp_template::String
     intermediate_template::Union{Nothing,String}
@@ -66,25 +67,7 @@ function Config(; root_dir::AbstractString,
     ext = _normalize_extension(String(extension))
     suffix_value = suffix === nothing ? nothing : String(suffix)
 
-    placeholder_range = _find_placeholder_range(inter_template)
-    derived_width = index_width === nothing ? nothing : Int(index_width)
-
-    if derived_width !== nothing
-        placeholder_range === nothing && throw(ArgumentError("index_width provided but intermediate_template lacks '#' placeholder"))
-    end
-
-    if placeholder_range !== nothing && derived_width === nothing
-        derived_width = length(placeholder_range)
-    end
-
-    if placeholder_range !== nothing && derived_width !== nothing && derived_width != length(placeholder_range)
-        throw(ArgumentError("index_width must match the number of '#' characters in intermediate_template"))
-    end
-
-    prefix = placeholder_range === nothing ? nothing :
-        String(_substring(inter_template::String, firstindex(inter_template), first(placeholder_range) - 1))
-    suffix_part = placeholder_range === nothing ? nothing :
-        String(_substring(inter_template::String, last(placeholder_range) + 1, lastindex(inter_template)))
+    metadata = _compute_intermediate_metadata(inter_template, index_width)
 
     mkpath(root)
 
@@ -94,10 +77,10 @@ function Config(; root_dir::AbstractString,
                   ext,
                   suffix_value,
                   start_value,
-                  derived_width,
-                  placeholder_range,
-                  prefix,
-                  suffix_part)
+                  metadata.index_width,
+                  metadata.placeholder_range,
+                  metadata.intermediate_prefix,
+                  metadata.intermediate_suffix)
 end
 
 mutable struct IndexState
@@ -105,6 +88,19 @@ mutable struct IndexState
     highest_seen::Int
     last_scan_date::Union{Nothing,Date}
     active_date::Date
+end
+
+function set_intermediate_template!(config::Config,
+                                    template::Union{Nothing,AbstractString};
+                                    index_width::Union{Nothing,Integer}=nothing)
+    new_template = template === nothing ? nothing : String(template)
+    metadata = _compute_intermediate_metadata(new_template, index_width)
+    config.intermediate_template = new_template
+    config.index_width = metadata.index_width
+    config.placeholder_range = metadata.placeholder_range
+    config.intermediate_prefix = metadata.intermediate_prefix
+    config.intermediate_suffix = metadata.intermediate_suffix
+    return config
 end
 
 function IndexState(config::Config; now::Dates.AbstractDateTime=Dates.now())
@@ -119,6 +115,12 @@ timestamp(dt::Dates.AbstractDateTime, template::AbstractString) = Dates.format(d
 
 host_name() = gethostname()
 
+"""
+    current_collection_path(config::Config, state::IndexState) -> String
+
+Return the absolute path for the collection directory for `state.active_date`. When an intermediate
+template is configured, the current index determines the folder name within the date directory.
+"""
 function current_collection_path(config::Config, state::IndexState)
     date_folder = _date_folder_component(config, state.active_date)
     parts = String[config.root_dir, date_folder]
@@ -128,6 +130,12 @@ function current_collection_path(config::Config, state::IndexState)
     return joinpath(parts...)
 end
 
+"""
+    ensure_collection_path!(config::Config, state::IndexState; now=Dates.now()) -> String
+
+Align the index state to the provided time and create (if necessary) the collection directory for
+that day and current index. Returns the path that was ensured.
+"""
 function ensure_collection_path!(config::Config, state::IndexState; now::Dates.AbstractDateTime=Dates.now())
     _align_state_date!(config, state, now)
     path = current_collection_path(config, state)
@@ -141,6 +149,12 @@ function increment_index!(state::IndexState)
     return state.current
 end
 
+"""
+    create_next_output_directory!(config::Config, state::IndexState; now=Dates.now()) -> String
+
+Advance the index to the next available number (scanning the filesystem if needed), update the
+state, and ensure the corresponding collection directory exists. Returns the directory path.
+"""
 function create_next_output_directory!(config::Config, state::IndexState; now::Dates.AbstractDateTime=Dates.now())
     refresh_index!(state, config; now=now, force=false)
     next_index = max(state.highest_seen + 1, config.start_index)
@@ -149,6 +163,12 @@ function create_next_output_directory!(config::Config, state::IndexState; now::D
     return ensure_collection_path!(config, state; now=now)
 end
 
+"""
+    get_file_path(config::Config, state::IndexState; tag=nothing, now=Dates.now()) -> String
+
+Return the full file path for the given time, incorporating the current collection directory,
+timestamp, optional suffix, and optional tag. The path is not created on disk.
+"""
 function get_file_path(config::Config,
                        state::IndexState;
                        tag::Union{Nothing,AbstractString}=nothing,
@@ -205,6 +225,35 @@ function _normalize_extension(ext::String)
     isempty(ext) && return ""
     startswith(ext, ".") && return ext
     return "." * ext
+end
+
+function _compute_intermediate_metadata(inter_template::Union{Nothing,String},
+                                        index_width_hint::Union{Nothing,Integer})
+    placeholder_range = _find_placeholder_range(inter_template)
+    derived_width = index_width_hint === nothing ? nothing : Int(index_width_hint)
+
+    if derived_width !== nothing && placeholder_range === nothing
+        throw(ArgumentError("index_width provided but intermediate_template lacks '#' placeholder"))
+    end
+
+    intermediate_prefix = nothing
+    intermediate_suffix = nothing
+
+    if placeholder_range !== nothing
+        template_str = inter_template::String
+        if derived_width === nothing
+            derived_width = length(placeholder_range)
+        elseif derived_width != length(placeholder_range)
+            throw(ArgumentError("index_width must match the number of '#' characters in intermediate_template"))
+        end
+        intermediate_prefix = String(_substring(template_str, firstindex(template_str), first(placeholder_range) - 1))
+        intermediate_suffix = String(_substring(template_str, last(placeholder_range) + 1, lastindex(template_str)))
+    end
+
+    return (index_width = derived_width,
+            placeholder_range = placeholder_range,
+            intermediate_prefix = intermediate_prefix,
+            intermediate_suffix = intermediate_suffix)
 end
 
 _find_placeholder_range(::Nothing) = nothing
