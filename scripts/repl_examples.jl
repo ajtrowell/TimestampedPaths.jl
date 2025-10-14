@@ -16,7 +16,7 @@ primary_config = Config(
     start_index = 1,
     now = start_time,
 )
-set_subfolder_template!(primary_config, "set"; now = start_time)
+set_intermediate_stem!(primary_config, "set"; now = start_time)
 
 secondary_config = Config(
     root_dir = demo_root,
@@ -26,7 +26,7 @@ secondary_config = Config(
     start_index = primary_config.start_index,
     now = start_time,
 )
-set_subfolder_template!(secondary_config, "set"; now = start_time)
+set_intermediate_stem!(secondary_config, "set"; now = start_time)
 
 primary_paths = PathGenerator(primary_config)
 secondary_paths = PathGenerator(secondary_config)
@@ -51,8 +51,8 @@ Helper utilities:
   refresh_index!(config; now=DateTime, force=true/false)
   sync_to_latest_index!(config; now=DateTime)
   create_next_output_directory!(config; now=DateTime)
-  set_subfolder_template!(config, stem; min_subfolder_index_width=2)
-  set_date_template!(config, "yyyymmdd")
+  set_intermediate_stem!(config, stem; min_index_width=2)
+  set_subfolder_template!(config, "yyyymmdd")
   primary_paths(; tag=..., now=DateTime)
 """)
 
@@ -65,8 +65,8 @@ Suggested experiments:
   * sync_to_latest_index!(secondary_config)
   * ensure_collection_path!(primary_config)
   * increment_index!(secondary_config)
-  * set_subfolder_template!(primary_config, "calibration"; now=DateTime(2024, 10, 11, 9, 30))
-  * set_date_template!(primary_config, "yyyymmdd"; now=DateTime(2024, 10, 12))
+  * set_intermediate_stem!(primary_config, "calibration"; now=DateTime(2024, 10, 11, 9, 30))
+  * set_subfolder_template!(primary_config, "yyyymmdd"; now=DateTime(2024, 10, 12))
 
 Use Ctrl+D (or exit()) to leave the REPL.
 """)

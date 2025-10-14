@@ -17,8 +17,9 @@ export Config,
        set_log_level!,
        log_info,
        log_debug,
-       set_date_template!,
        set_subfolder_template!,
+       set_date_template!,
+       set_intermediate_stem!,
        set_intermediate_template!
 
 const _LOG_LEVEL = Ref{LogLevel}(Logging.Warn)
@@ -121,6 +122,10 @@ end
 
 function PathGenerator(config::Config; tag::Union{Nothing,AbstractString}=nothing)
     stored_tag = tag === nothing ? nothing : String(tag)
+    if config.placeholder_range !== nothing
+        refresh_index!(config; now=DateTime(config.state.active_date), force=false)
+        _promote_to_next_index!(config)
+    end
     return PathGenerator(config, stored_tag)
 end
 
@@ -156,49 +161,69 @@ function set_intermediate_template!(config::Config,
     return config
 end
 
-function set_subfolder_template!(config::Config,
-                                 stem::Union{Nothing,AbstractString};
-                                 min_subfolder_index_width::Integer=2,
-                                 now::Dates.AbstractDateTime=DateTime(config.state.active_date),
-                                 align_state::Bool=true)
-    if stem === nothing
-        return set_intermediate_template!(config, nothing;
-                                          index_width=nothing,
-                                          now=now,
-                                          align_state=align_state)
+"""
+    set_intermediate_stem!(config::Config, stem; min_index_width=2, now=Dates.now())
+
+Convenience wrapper that derives the intermediate template from a stem (e.g. `"run"`
+becomes `"run_##"`). The helper refreshes indexing metadata, preserves the highest
+observed index, and advances the active index so subsequent calls pick up the next
+slot. Pass `nothing` to remove the intermediate folder entirely.
+"""
+function set_intermediate_stem!(config::Config,
+                                stem::Union{Nothing,AbstractString};
+                                min_index_width::Integer=2,
+                                now::Dates.AbstractDateTime=DateTime(config.state.active_date),
+                                align_state::Bool=true)
+    prev_highest = config.state.highest_seen
+
+    result = if stem === nothing
+        set_intermediate_template!(config, nothing;
+                                   index_width=nothing,
+                                   now=now,
+                                   align_state=align_state)
+    else
+        stem_str = String(stem)
+        if occursin('#', stem_str)
+            set_intermediate_template!(config, stem_str;
+                                       index_width=nothing,
+                                       now=now,
+                                       align_state=align_state)
+        else
+            width_min = Int(min_index_width)
+            width_min < 1 && throw(ArgumentError("min_index_width must be positive"))
+            existing_width = config.index_width
+            width_hint = existing_width === nothing ? width_min : max(existing_width, width_min)
+            template = string(stem_str, "_", repeat("#", width_hint))
+            set_intermediate_template!(config, template;
+                                       index_width=width_hint,
+                                       now=now,
+                                       align_state=align_state)
+        end
     end
 
-    stem_str = String(stem)
-
-    if occursin('#', stem_str)
-        return set_intermediate_template!(config, stem_str;
-                                          index_width=nothing,
-                                          now=now,
-                                          align_state=align_state)
+    if align_state
+        state = config.state
+        state.highest_seen = max(state.highest_seen, prev_highest)
+        if config.placeholder_range !== nothing
+            _promote_to_next_index!(config)
+        end
     end
 
-    min_width = Int(min_subfolder_index_width)
-    min_width < 1 && throw(ArgumentError("min_subfolder_index_width must be positive"))
-    existing_width = config.index_width
-    width_hint = existing_width === nothing ? min_width : max(existing_width, min_width)
-    placeholder = repeat("#", width_hint)
-    template = string(stem_str, "_", placeholder)
-    return set_intermediate_template!(config, template;
-                                      index_width=width_hint,
-                                      now=now,
-                                      align_state=align_state)
+    return result
 end
 
-function set_date_template!(config::Config,
-                            template::Union{Nothing,AbstractString};
-                            now::Dates.AbstractDateTime=DateTime(config.state.active_date),
-                            align_state::Bool=true)
+function set_subfolder_template!(config::Config,
+                                 template::Union{Nothing,AbstractString};
+                                 now::Dates.AbstractDateTime=DateTime(config.state.active_date),
+                                 align_state::Bool=true)
     config.subfolder_template = template === nothing ? nothing : String(template)
     if align_state
         refresh_index!(config; now=now, force=true)
     end
     return config
 end
+
+set_date_template! = set_subfolder_template!
 
 function IndexState(config::Config; now::Dates.AbstractDateTime=Dates.now())
     date = Date(now)
@@ -239,6 +264,7 @@ function ensure_collection_path!(config::Config, state::IndexState; now::Dates.A
     _align_state_date!(config, state, now)
     path = current_collection_path(config, state)
     mkpath(path)
+    state.highest_seen = max(state.highest_seen, state.current)
     return path
 end
 
@@ -365,6 +391,13 @@ end
 
 _align_state_date!(config::Config, now::Dates.AbstractDateTime) =
     _align_state_date!(config, config.state, now)
+
+function _promote_to_next_index!(config::Config)
+    state = config.state
+    next_index = max(state.highest_seen + 1, config.start_index)
+    state.current = next_index
+    return next_index
+end
 
 function _normalize_extension(ext::String)
     isempty(ext) && return ""

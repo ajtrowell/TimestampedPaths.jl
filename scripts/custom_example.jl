@@ -10,7 +10,7 @@ namer_config = TP.Config(
     root_dir = demo_root,
     subfolder_template = "yyyy_mmdd",
     timestamp_template = "yyyy_mmdd_HHMMSS",
-    intermediate_template = "collection_##",
+    intermediate_template = nothing,
     extension = ".beve",
     start_index = 1,
 );

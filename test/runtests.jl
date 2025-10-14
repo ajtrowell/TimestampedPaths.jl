@@ -28,26 +28,26 @@ end
                         extension=".dat",
                         now=now)
 
-        set_subfolder_template!(config, "phase"; now=now)
+        set_intermediate_stem!(config, "phase"; now=now)
         @test config.intermediate_template == "phase_##"
         @test config.index_width == 2
         @test config.intermediate_prefix == "phase_"
         @test endswith(current_collection_path(config), joinpath("2024-01-01", "phase_01"))
 
-        set_date_template!(config, "yyyymmdd"; now=now)
+        set_subfolder_template!(config, "yyyymmdd"; now=now)
         @test config.subfolder_template == "yyyymmdd"
         @test endswith(current_collection_path(config), joinpath("20240101", "phase_01"))
 
-        set_date_template!(config, nothing; now=now)
+        set_subfolder_template!(config, nothing; now=now)
         @test config.subfolder_template === nothing
         @test endswith(current_collection_path(config), joinpath("2024-01-01", "phase_01"))
 
-        set_subfolder_template!(config, "batch"; min_subfolder_index_width=3, now=now)
+        set_intermediate_stem!(config, "batch"; min_index_width=3, now=now)
         @test config.index_width == 3
         @test config.intermediate_template == "batch_###"
         @test endswith(current_collection_path(config), joinpath("2024-01-01", "batch_001"))
 
-        set_subfolder_template!(config, nothing; now=now)
+        set_intermediate_stem!(config, nothing; now=now)
         @test config.intermediate_template === nothing
         @test current_collection_path(config) == joinpath(config.root_dir, "2024-01-01")
 
@@ -143,6 +143,47 @@ end
         @test isdir(next_dir)
         third_path = generator(now=now + Minute(11))
         @test dirname(third_path) == next_dir
+    end
+end
+
+@testset "Path generator primes next index" begin
+    mktempdir() do root
+        now = DateTime(2024, 9, 1, 9, 0, 0)
+        config = Config(root_dir=root,
+                        timestamp_template="yyyy-mm-dd_HHMMSS",
+                        extension=".bin",
+                        start_index=1,
+                        now=now)
+        set_intermediate_stem!(config, "batch"; now=now)
+
+        first_dir = create_next_output_directory!(config; now=now)
+        @test endswith(first_dir, "batch_01")
+
+        generator = PathGenerator(config)
+        @test config.state.current == 2
+
+        next_path = generator(now=now + Minute(1))
+        @test occursin("batch_02", next_path)
+    end
+end
+
+@testset "set_intermediate_stem! increments index" begin
+    mktempdir() do root
+        now = DateTime(2024, 10, 1, 12, 0, 0)
+        config = Config(root_dir=root,
+                        timestamp_template="yyyy-mm-dd_HHMMSS",
+                        extension=".dat",
+                        start_index=1,
+                        now=now)
+        set_intermediate_stem!(config, "run"; now=now)
+        ensured = ensure_collection_path!(config; now=now)
+        @test endswith(ensured, "run_01")
+
+        later = now + Minute(5)
+        set_intermediate_stem!(config, "cycle"; now=later)
+        @test config.state.current == 2
+        ensured_cycle = ensure_collection_path!(config; now=later)
+        @test endswith(ensured_cycle, "cycle_02")
     end
 end
 
