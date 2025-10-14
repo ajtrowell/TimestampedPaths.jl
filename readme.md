@@ -11,6 +11,17 @@ Pkg.add(url="https://github.com/ashley/TimestampedPaths.jl")
 
 The package is lightweight and only depends on the Julia standard library (`Dates` and `Logging`).
 
+## TLDR; simple workflow - in development
+To just get date stamped folders with time stamped files, 
+here is a minimal workflow.
+```julia
+using TimestampedPaths
+TP = TimestampedPaths
+
+path_generator = TP.PathGenerator(TP.Config(root_dir="./data",extension=".dat"))
+new_path = path_generator(tag="file_name_stem");
+```
+
 ## Core ideas
 
 - **Config** – describes how paths are generated (root directory, timestamp format, optional intermediate folder template, file extension, suffixes, etc.) and owns a mutable indexing state accessible as `config.state`.
