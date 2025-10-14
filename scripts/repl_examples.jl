@@ -11,30 +11,30 @@ start_time = DateTime(2024, 10, 11, 9, 0)
 primary_config = Config(
     root_dir = demo_root,
     timestamp_template = "yyyy-mm-dd_HHMMSS",
-    intermediate_template = "set_##",
     extension = ".dat",
     suffix = "host",
     start_index = 1,
     now = start_time,
 )
+set_subfolder_template!(primary_config, "set"; now = start_time)
 
 secondary_config = Config(
     root_dir = demo_root,
     timestamp_template = primary_config.timestamp_template,
-    intermediate_template = primary_config.intermediate_template,
     extension = primary_config.extension,
     suffix = primary_config.suffix,
     start_index = primary_config.start_index,
     now = start_time,
 )
+set_subfolder_template!(secondary_config, "set"; now = start_time)
 
 primary_paths = PathGenerator(primary_config)
 secondary_paths = PathGenerator(secondary_config)
 
-function print_collection_state(name::AbstractString, config::Config; now = Dates.now())
-    path = current_collection_path(config)
-    file_example = get_file_path(config; tag = name, now = now)
-    println("[$name] index=$(config.state.current) path=$path")
+function print_collection_state(name::AbstractString, paths::PathGenerator; now = Dates.now())
+    config = paths.config
+    file_example = paths(tag = name, now = now)
+    println("[$name] index=$(config.state.current) folder=$(dirname(file_example))")
     println("[$name] sample file -> $file_example")
 end
 
@@ -47,15 +47,17 @@ Variables now available in the session:
   secondary_config    → Config simulating a follower host
   secondary_paths     → Callable path generator bound to secondary_config
 Helper utilities:
-  print_collection_state(name, config; now=DateTime)
+  print_collection_state(name, primary_paths; now=DateTime)
   refresh_index!(config; now=DateTime, force=true/false)
   sync_to_latest_index!(config; now=DateTime)
   create_next_output_directory!(config; now=DateTime)
+  set_subfolder_template!(config, stem; min_subfolder_index_width=2)
+  set_date_template!(config, "yyyymmdd")
   primary_paths(; tag=..., now=DateTime)
 """)
 
-print_collection_state("primary", primary_config; now = start_time)
-print_collection_state("secondary", secondary_config; now = start_time)
+print_collection_state("primary", primary_paths; now = start_time)
+print_collection_state("secondary", secondary_paths; now = start_time)
 
 println("""
 Suggested experiments:
@@ -63,6 +65,8 @@ Suggested experiments:
   * sync_to_latest_index!(secondary_config)
   * ensure_collection_path!(primary_config)
   * increment_index!(secondary_config)
+  * set_subfolder_template!(primary_config, "calibration"; now=DateTime(2024, 10, 11, 9, 30))
+  * set_date_template!(primary_config, "yyyymmdd"; now=DateTime(2024, 10, 12))
 
 Use Ctrl+D (or exit()) to leave the REPL.
 """)

@@ -17,6 +17,7 @@ export Config,
        set_log_level!,
        log_info,
        log_debug,
+       set_date_template!,
        set_subfolder_template!,
        set_intermediate_template!
 
@@ -156,9 +157,42 @@ function set_intermediate_template!(config::Config,
 end
 
 function set_subfolder_template!(config::Config,
-                                 template::Union{Nothing,AbstractString};
+                                 stem::Union{Nothing,AbstractString};
+                                 min_subfolder_index_width::Integer=2,
                                  now::Dates.AbstractDateTime=DateTime(config.state.active_date),
                                  align_state::Bool=true)
+    if stem === nothing
+        return set_intermediate_template!(config, nothing;
+                                          index_width=nothing,
+                                          now=now,
+                                          align_state=align_state)
+    end
+
+    stem_str = String(stem)
+
+    if occursin('#', stem_str)
+        return set_intermediate_template!(config, stem_str;
+                                          index_width=nothing,
+                                          now=now,
+                                          align_state=align_state)
+    end
+
+    min_width = Int(min_subfolder_index_width)
+    min_width < 1 && throw(ArgumentError("min_subfolder_index_width must be positive"))
+    existing_width = config.index_width
+    width_hint = existing_width === nothing ? min_width : max(existing_width, min_width)
+    placeholder = repeat("#", width_hint)
+    template = string(stem_str, "_", placeholder)
+    return set_intermediate_template!(config, template;
+                                      index_width=width_hint,
+                                      now=now,
+                                      align_state=align_state)
+end
+
+function set_date_template!(config::Config,
+                            template::Union{Nothing,AbstractString};
+                            now::Dates.AbstractDateTime=DateTime(config.state.active_date),
+                            align_state::Bool=true)
     config.subfolder_template = template === nothing ? nothing : String(template)
     if align_state
         refresh_index!(config; now=now, force=true)

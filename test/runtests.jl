@@ -28,31 +28,33 @@ end
                         extension=".dat",
                         now=now)
 
-        set_intermediate_template!(config, "phase_##"; now=now)
+        set_subfolder_template!(config, "phase"; now=now)
         @test config.intermediate_template == "phase_##"
         @test config.index_width == 2
         @test config.intermediate_prefix == "phase_"
         @test endswith(current_collection_path(config), joinpath("2024-01-01", "phase_01"))
 
-        set_subfolder_template!(config, "yyyymmdd"; now=now)
+        set_date_template!(config, "yyyymmdd"; now=now)
         @test config.subfolder_template == "yyyymmdd"
         @test endswith(current_collection_path(config), joinpath("20240101", "phase_01"))
 
-        set_subfolder_template!(config, nothing; now=now)
+        set_date_template!(config, nothing; now=now)
         @test config.subfolder_template === nothing
         @test endswith(current_collection_path(config), joinpath("2024-01-01", "phase_01"))
+
+        set_subfolder_template!(config, "batch"; min_subfolder_index_width=3, now=now)
+        @test config.index_width == 3
+        @test config.intermediate_template == "batch_###"
+        @test endswith(current_collection_path(config), joinpath("2024-01-01", "batch_001"))
+
+        set_subfolder_template!(config, nothing; now=now)
+        @test config.intermediate_template === nothing
+        @test current_collection_path(config) == joinpath(config.root_dir, "2024-01-01")
 
         set_intermediate_template!(config, "special"; now=now)
         @test config.index_width === nothing
         @test config.placeholder_range === nothing
         @test endswith(current_collection_path(config), joinpath("2024-01-01", "special"))
-
-        set_intermediate_template!(config, nothing; now=now)
-        set_subfolder_template!(config, nothing; now=now)
-        @test config.intermediate_template === nothing
-        @test config.index_width === nothing
-        @test !occursin("special", current_collection_path(config))
-        @test current_collection_path(config) == joinpath(config.root_dir, "2024-01-01")
 
         @test_throws ArgumentError set_intermediate_template!(config, "phase_##"; index_width=3, now=now)
         @test_throws ArgumentError set_intermediate_template!(config, nothing; index_width=2, now=now)
