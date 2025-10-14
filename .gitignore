@@ -4,5 +4,6 @@ namer.hpp
 .julia_depot
 .juliaup
 
+demo_outputs/
 Manifest.toml
 
