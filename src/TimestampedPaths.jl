@@ -63,8 +63,8 @@ mutable struct Config
 end
 
 function Config(; root_dir::AbstractString,
-                 timestamp_template::AbstractString,
-                 subfolder_template::Union{Nothing,AbstractString}=nothing,
+                 timestamp_template::AbstractString = "yyyy_mmdd_HHMMSS",
+                 subfolder_template::Union{Nothing,AbstractString}= "yyyy_mmdd",
                  intermediate_template::Union{Nothing,AbstractString}=nothing,
                  extension::AbstractString="",
                  suffix::Union{Nothing,AbstractString}=nothing,
