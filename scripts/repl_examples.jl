@@ -6,23 +6,35 @@ using TimestampedPaths
 set_log_level!(Logging.Info)
 
 demo_root = joinpath(pwd(), "demo_outputs")
+start_time = DateTime(2024, 10, 11, 9, 0)
 
-demo_config = Config(
+primary_config = Config(
     root_dir = demo_root,
     timestamp_template = "yyyy-mm-dd_HHMMSS",
     intermediate_template = "set_##",
     extension = ".dat",
     suffix = "host",
     start_index = 1,
+    now = start_time,
 )
 
-primary_state = IndexState(demo_config; now = DateTime(2024, 10, 11, 9, 0))
-secondary_state = IndexState(demo_config; now = DateTime(2024, 10, 11, 9, 0))
+secondary_config = Config(
+    root_dir = demo_root,
+    timestamp_template = primary_config.timestamp_template,
+    intermediate_template = primary_config.intermediate_template,
+    extension = primary_config.extension,
+    suffix = primary_config.suffix,
+    start_index = primary_config.start_index,
+    now = start_time,
+)
 
-function print_collection_state(name::AbstractString, state::IndexState; now = Dates.now())
-    path = current_collection_path(demo_config, state)
-    file_example = get_file_path(demo_config, state; tag = name, now = now)
-    println("[$name] index=$(state.current) path=$path")
+primary_paths = PathGenerator(primary_config)
+secondary_paths = PathGenerator(secondary_config)
+
+function print_collection_state(name::AbstractString, config::Config; now = Dates.now())
+    path = current_collection_path(config)
+    file_example = get_file_path(config; tag = name, now = now)
+    println("[$name] index=$(config.state.current) path=$path")
     println("[$name] sample file -> $file_example")
 end
 
@@ -30,29 +42,30 @@ println("""
 TimestampedPaths demo
 =====================
 Variables now available in the session:
-  demo_config        → shared Config rooted at $(demo_root)
-  primary_state      → IndexState simulating the coordinating host
-  secondary_state    → IndexState simulating a follower host
+  primary_config      → Config simulating the coordinating host
+  primary_paths       → Callable path generator bound to primary_config
+  secondary_config    → Config simulating a follower host
+  secondary_paths     → Callable path generator bound to secondary_config
 Helper utilities:
-  print_collection_state(name, state; now=DateTime)
-  refresh_index!(state, demo_config; now=DateTime, force=true/false)
-  sync_to_latest_index!(state, demo_config; now=DateTime)
-  create_next_output_directory!(demo_config, state; now=DateTime)
+  print_collection_state(name, config; now=DateTime)
+  refresh_index!(config; now=DateTime, force=true/false)
+  sync_to_latest_index!(config; now=DateTime)
+  create_next_output_directory!(config; now=DateTime)
+  primary_paths(; tag=..., now=DateTime)
 """)
 
-print_collection_state("primary", primary_state; now = DateTime(2024, 10, 11, 9, 0))
-print_collection_state("secondary", secondary_state; now = DateTime(2024, 10, 11, 9, 0))
+print_collection_state("primary", primary_config; now = start_time)
+print_collection_state("secondary", secondary_config; now = start_time)
 
 println("""
 Suggested experiments:
-  * create_next_output_directory!(demo_config, primary_state)
-  * sync_to_latest_index!(secondary_state, demo_config)
-  * ensure_collection_path!(demo_config, primary_state)
-  * increment_index!(secondary_state)
+  * create_next_output_directory!(primary_config)
+  * sync_to_latest_index!(secondary_config)
+  * ensure_collection_path!(primary_config)
+  * increment_index!(secondary_config)
 
 Use Ctrl+D (or exit()) to leave the REPL.
 """)
-
 
 function write_to_file(filename::String, msg::AbstractString = "File write")
     open((io)->write(io, msg), filename, "w")

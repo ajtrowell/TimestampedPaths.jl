@@ -5,6 +5,7 @@ using Logging
 
 export Config,
        IndexState,
+       PathGenerator,
        timestamp,
        current_collection_path,
        ensure_collection_path!,
@@ -37,6 +38,13 @@ function log_debug(msg)
     return nothing
 end
 
+mutable struct IndexState
+    current::Int
+    highest_seen::Int
+    last_scan_date::Union{Nothing,Date}
+    active_date::Date
+end
+
 mutable struct Config
     root_dir::String
     timestamp_template::String
@@ -49,6 +57,7 @@ mutable struct Config
     placeholder_range::Union{Nothing,UnitRange{Int}}
     intermediate_prefix::Union{Nothing,String}
     intermediate_suffix::Union{Nothing,String}
+    state::IndexState
 end
 
 function Config(; root_dir::AbstractString,
@@ -58,7 +67,8 @@ function Config(; root_dir::AbstractString,
                  extension::AbstractString="",
                  suffix::Union{Nothing,AbstractString}=nothing,
                  start_index::Integer=1,
-                 index_width::Union{Nothing,Integer}=nothing)
+                 index_width::Union{Nothing,Integer}=nothing,
+                 now::Dates.AbstractDateTime=Dates.now())
     start_value = Int(start_index)
     start_value < 0 && throw(ArgumentError("start_index must be non-negative"))
 
@@ -73,29 +83,65 @@ function Config(; root_dir::AbstractString,
 
     mkpath(root)
 
-    return Config(root,
-                  ts_template,
-                  subfolder_value,
-                  inter_template,
-                  ext,
-                  suffix_value,
-                  start_value,
-                  metadata.index_width,
-                  metadata.placeholder_range,
-                  metadata.intermediate_prefix,
-                  metadata.intermediate_suffix)
+    initial_date = Date(now)
+    initial_state = IndexState(start_value,
+                               start_value - 1,
+                               nothing,
+                               initial_date)
+
+    config = Config(root,
+                    ts_template,
+                    subfolder_value,
+                    inter_template,
+                    ext,
+                    suffix_value,
+                    start_value,
+                    metadata.index_width,
+                    metadata.placeholder_range,
+                    metadata.intermediate_prefix,
+                    metadata.intermediate_suffix,
+                    initial_state)
+    refresh_index!(config; now=now, force=true)
+    return config
 end
 
-mutable struct IndexState
-    current::Int
-    highest_seen::Int
-    last_scan_date::Union{Nothing,Date}
-    active_date::Date
+"""
+    PathGenerator(config::Config; tag=nothing)
+
+Wrap a `Config` in a callable object that ensures the current collection path and
+returns filenames on demand. Provide a default `tag` to reuse it across calls.
+The functor accepts optional `tag` (pass `nothing` to suppress a default tag) and
+`now` keywords when invoked.
+"""
+struct PathGenerator
+    config::Config
+    default_tag::Union{Nothing,String}
+end
+
+function PathGenerator(config::Config; tag::Union{Nothing,AbstractString}=nothing)
+    stored_tag = tag === nothing ? nothing : String(tag)
+    return PathGenerator(config, stored_tag)
+end
+
+function (generator::PathGenerator)(; tag::Union{Missing,Nothing,AbstractString}=missing,
+                                    now::Dates.AbstractDateTime=Dates.now())
+    tag_value = if tag === missing
+        generator.default_tag
+    elseif tag === nothing
+        nothing
+    else
+        String(tag)
+    end
+    ensure_collection_path!(generator.config; now=now)
+    return get_file_path(generator.config, generator.config.state;
+                         tag=tag_value, now=now, ensure_path=false)
 end
 
 function set_intermediate_template!(config::Config,
                                     template::Union{Nothing,AbstractString};
-                                    index_width::Union{Nothing,Integer}=nothing)
+                                    index_width::Union{Nothing,Integer}=nothing,
+                                    now::Dates.AbstractDateTime=DateTime(config.state.active_date),
+                                    align_state::Bool=true)
     new_template = template === nothing ? nothing : String(template)
     metadata = _compute_intermediate_metadata(new_template, index_width)
     config.intermediate_template = new_template
@@ -103,11 +149,20 @@ function set_intermediate_template!(config::Config,
     config.placeholder_range = metadata.placeholder_range
     config.intermediate_prefix = metadata.intermediate_prefix
     config.intermediate_suffix = metadata.intermediate_suffix
+    if align_state
+        refresh_index!(config; now=now, force=true)
+    end
     return config
 end
 
-function set_subfolder_template!(config::Config, template::Union{Nothing,AbstractString})
+function set_subfolder_template!(config::Config,
+                                 template::Union{Nothing,AbstractString};
+                                 now::Dates.AbstractDateTime=DateTime(config.state.active_date),
+                                 align_state::Bool=true)
     config.subfolder_template = template === nothing ? nothing : String(template)
+    if align_state
+        refresh_index!(config; now=now, force=true)
+    end
     return config
 end
 
@@ -122,6 +177,7 @@ end
 timestamp(dt::Dates.AbstractDateTime, template::AbstractString) = Dates.format(dt, template)
 
 """
+    current_collection_path(config::Config) -> String
     current_collection_path(config::Config, state::IndexState) -> String
 
 Return the absolute path for the collection directory for `state.active_date`. When an intermediate
@@ -136,7 +192,10 @@ function current_collection_path(config::Config, state::IndexState)
     return joinpath(parts...)
 end
 
+current_collection_path(config::Config) = current_collection_path(config, config.state)
+
 """
+    ensure_collection_path!(config::Config; now=Dates.now()) -> String
     ensure_collection_path!(config::Config, state::IndexState; now=Dates.now()) -> String
 
 Align the index state to the provided time and create (if necessary) the collection directory for
@@ -149,13 +208,20 @@ function ensure_collection_path!(config::Config, state::IndexState; now::Dates.A
     return path
 end
 
+function ensure_collection_path!(config::Config; now::Dates.AbstractDateTime=Dates.now())
+    return ensure_collection_path!(config, config.state; now=now)
+end
+
 function increment_index!(state::IndexState)
     state.current += 1
     state.highest_seen = max(state.highest_seen, state.current)
     return state.current
 end
 
+increment_index!(config::Config) = increment_index!(config.state)
+
 """
+    create_next_output_directory!(config::Config; now=Dates.now()) -> String
     create_next_output_directory!(config::Config, state::IndexState; now=Dates.now()) -> String
 
 Advance the index to the next available number (scanning the filesystem if needed), update the
@@ -169,7 +235,12 @@ function create_next_output_directory!(config::Config, state::IndexState; now::D
     return ensure_collection_path!(config, state; now=now)
 end
 
+function create_next_output_directory!(config::Config; now::Dates.AbstractDateTime=Dates.now())
+    return create_next_output_directory!(config, config.state; now=now)
+end
+
 """
+    get_file_path(config::Config; tag=nothing, now=Dates.now()) -> String
     get_file_path(config::Config, state::IndexState; tag=nothing, now=Dates.now()) -> String
 
 Return the full file path for the given time, incorporating the current collection directory,
@@ -178,24 +249,46 @@ timestamp, optional suffix, and optional tag. The path is not created on disk.
 function get_file_path(config::Config,
                        state::IndexState;
                        tag::Union{Nothing,AbstractString}=nothing,
-                       now::Dates.AbstractDateTime=Dates.now())
-    _align_state_date!(config, state, now)
-    collection_path = current_collection_path(config, state)
+                       now::Dates.AbstractDateTime=Dates.now(),
+                       ensure_path::Bool=false)
+    collection_path = if ensure_path
+        ensure_collection_path!(config, state; now=now)
+    else
+        _align_state_date!(config, state, now)
+        current_collection_path(config, state)
+    end
     ts = timestamp(now, config.timestamp_template)
 
     parts = String[ts]
-    if config.suffix !== nothing
-        push!(parts, config.suffix::String)
+    suffix_value = config.suffix
+    if suffix_value !== nothing
+        push!(parts, suffix_value::String)
     end
-    if tag !== nothing
-        push!(parts, String(tag))
+
+    tag_value = tag === nothing ? nothing : String(tag)
+    if tag_value !== nothing
+        push!(parts, tag_value)
     end
+
     filename = join(parts, "_")
     if !isempty(config.extension)
         filename *= config.extension
     end
     return joinpath(collection_path, filename)
 end
+function get_file_path(config::Config;
+                       tag::Union{Nothing,AbstractString}=nothing,
+                       now::Dates.AbstractDateTime=Dates.now(),
+                       ensure_path::Bool=true)
+    return get_file_path(config, config.state;
+                         tag=tag,
+                         now=now,
+                         ensure_path=ensure_path)
+end
+
+get_file_path(generator::PathGenerator;
+              tag::Union{Missing,Nothing,AbstractString}=missing,
+              now::Dates.AbstractDateTime=Dates.now()) = generator(; tag=tag, now=now)
 
 function refresh_index!(state::IndexState,
                         config::Config;
@@ -217,8 +310,17 @@ function refresh_index!(state::IndexState,
     return state
 end
 
+function refresh_index!(config::Config;
+                        now::Dates.AbstractDateTime=Dates.now(),
+                        force::Bool=false)
+    return refresh_index!(config.state, config; now=now, force=force)
+end
+
 sync_to_latest_index!(state::IndexState, config::Config; now::Dates.AbstractDateTime=Dates.now()) =
     refresh_index!(state, config; now=now, force=true)
+
+sync_to_latest_index!(config::Config; now::Dates.AbstractDateTime=Dates.now()) =
+    refresh_index!(config; now=now, force=true)
 
 function _align_state_date!(config::Config, state::IndexState, now::Dates.AbstractDateTime)
     current_date = Date(now)
@@ -226,6 +328,9 @@ function _align_state_date!(config::Config, state::IndexState, now::Dates.Abstra
         refresh_index!(state, config; now=now, force=true)
     end
 end
+
+_align_state_date!(config::Config, now::Dates.AbstractDateTime) =
+    _align_state_date!(config, config.state, now)
 
 function _normalize_extension(ext::String)
     isempty(ext) && return ""

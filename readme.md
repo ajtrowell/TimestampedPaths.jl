@@ -13,9 +13,9 @@ The package is lightweight and only depends on the Julia standard library (`Date
 
 ## Core ideas
 
-- **Config** – describes how paths are generated (root directory, timestamp format, optional intermediate folder template, file extension, suffixes, etc.). Configs are now mutable so you can adjust settings like the intermediate folder template without rebuilding state.
-- **IndexState** – tracks the current index for a particular day and keeps multiple processes in sync by scanning the filesystem on demand.
-- **Helper functions** – `current_collection_path`, `ensure_collection_path!`, `get_file_path`, and `create_next_output_directory!` handle the repetitive pieces of path management.
+- **Config** – describes how paths are generated (root directory, timestamp format, optional intermediate folder template, file extension, suffixes, etc.) and owns a mutable indexing state accessible as `config.state`.
+- **IndexState** – still available when you need additional independent state objects (for example, a bespoke synchronization strategy), but most code can rely on the state that ships with each `Config`.
+- **Helper functions** – `current_collection_path`, `ensure_collection_path!`, `get_file_path`, and `create_next_output_directory!` handle the repetitive pieces of path management. `PathGenerator` wraps a `Config` and exposes a callable that yields fresh paths on demand.
 
 To keep the derived state in sync when you tweak the intermediate template, use `set_intermediate_template!`.
 
@@ -36,11 +36,11 @@ config = Config(
     extension = ".dat"
 )
 
-state = IndexState(config)
+paths = PathGenerator(config)
 
 # Ensure today's folder exists and get the first file path.
-path = ensure_collection_path!(config, state)
-filepath = get_file_path(config, state; tag="raw")
+filepath = paths()
+tagged = paths(tag="raw")
 
 # -> data/2024-05-25/2024-05-25_103000_raw.dat
 ```
@@ -59,18 +59,17 @@ config = Config(
     extension = ".bin"
 )
 
-state = IndexState(config)
+paths = PathGenerator(config)
 
-first_dir = ensure_collection_path!(config, state)
+first_dir = ensure_collection_path!(config)
 # -> data/2024-05-25/run_01
 
-next_dir = create_next_output_directory!(config, state)
+next_dir = create_next_output_directory!(config)
 # -> data/2024-05-25/run_02
 
 # Highlight a special collection by swapping the intermediate template.
 set_intermediate_template!(config, "calibration_##")
-state = IndexState(config)  # refresh the state for the new naming
-calibration_dir = create_next_output_directory!(config, state)
+calibration_dir = create_next_output_directory!(config)
 # -> data/2024-05-25/calibration_01
 ```
 
@@ -86,10 +85,9 @@ Use `set_intermediate_template!` whenever you need to rename or remove the inter
 
 ## Recommended workflow
 
-1. Create a single `Config` per data collection root.
-2. Initialize an `IndexState` for each worker/process that writes into the collection.
-3. Call `ensure_collection_path!` or `create_next_output_directory!` before writing files.
-4. Generate filenames with `get_file_path`, optionally passing a tag to categorize the file.
-5. When the folder naming scheme changes, call `set_intermediate_template!` and refresh the `IndexState`.
+1. Create a `Config` per data collection root (or per worker if you prefer isolated state). Each `Config` carries its active `IndexState` at `config.state`.
+2. Call `ensure_collection_path!` or `create_next_output_directory!` before writing files.
+3. Generate filenames with `get_file_path` (it now ensures directories automatically) or keep a `PathGenerator` handy for repeated calls; optionally pass a tag to categorize the file.
+4. When the folder naming scheme changes, call `set_intermediate_template!` (it automatically realigns the internal state; provide `now=` if you need to anchor the change to a specific timestamp).
 
 With these steps, you can focus on the data you are capturing while TimestampedPaths.jl keeps the filesystem tidy and predictable.
