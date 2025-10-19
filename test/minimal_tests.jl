@@ -5,11 +5,11 @@ const TP = TimestampedPaths
 
     mktempdir() do temp_root
         cd(temp_root) do
-            config = TP.Config(root_dir="./demo_data", extension=".beve")
+            config = TP.Config(root_dir="./test_data", extension=".beve")
             path_generator = TP.PathGenerator(config)
             filename = path_generator(tag="file_stem")
 
-            expected_root = joinpath(temp_root, "demo_data")
+            expected_root = joinpath(temp_root, "test_data")
             @test config.root_dir == expected_root
 
             open(filename, "w") do io
