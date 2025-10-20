@@ -2,6 +2,7 @@ module TimestampedPaths
 
 using Dates
 using Logging
+using DocStringExtensions
 
 export Config,
        IndexState,
@@ -525,4 +526,9 @@ function _extract_date_component(ts::String)
     return m.match
 end
 
+
+
+include("api.jl")
 end # module TimestampedPaths
+
+
