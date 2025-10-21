@@ -1,7 +1,26 @@
-export NamerConfig, NamerInterface
+export NamerConfig, NamerInterface, NamerState
+export date_folder_name, path_examples
 
 """
 # NamerConfig
+Path generating
+Case 1, no per collection folder.
+root_dir   /  date_folder/timestamped_file
+root_dir   /  date_folder/ yyyy_mmdd_HHMMSS_ stem
+/home/bob  / 2025_0120   / 2025_0120_223455_<pretag><tag><posttag>
+
+Case 2, per collection folder with index
+root_dir   /  date_folder/ collection_folder_001 / timestamped_file
+For a new collection, the index should be incremented.
+Optionally, the collection folder name stem could also be changed to 
+give some context for that collection of files.
+If the stem name changes, that is a good indication that the 
+index should increment.
+Handling these folder names and indices helps when making 
+collections with changing context. It also adds much of 
+the complexity that exists in this system.
+
+eg.
 $(TYPEDFIELDS)
 """
 @kwdef mutable struct NamerConfig
@@ -64,6 +83,7 @@ $(TYPEDFIELDS)
 end
 
 
+
 """
 # NamerInterface
 $(TYPEDFIELDS)
@@ -103,4 +123,28 @@ function Base.show(io::IO, ni::NamerInterface)
     )
 =#
     return nothing
+end
+
+
+
+# -------------
+# Implementation
+# -------------
+# Generate folder names.
+# Generate full folder path
+# Create folder path string
+# Create folder + file path string
+# Handle intermediate folder
+
+
+"Returns the date folder name, not the entire path."
+function date_folder_name(config::NamerConfig,state::NamerState; date::DateTime = Dates.now())::String
+    return ""
+end
+
+function path_examples()
+    gen = NamerInterface()
+    get_date_folder = (args...;kwargs...) -> date_folder_name(gen.config, gen.state, args..., kwargs...);
+
+    return () -> (;gen, get_date_folder)
 end
