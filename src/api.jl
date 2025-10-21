@@ -12,9 +12,30 @@ $(TYPEDFIELDS)
     The tag is provided when get_path() is run.
     """
     pre_tag::String = ""
+    """
+    Filename: timestamp_template+_+pretag+tag+posttag
+    The tag is provided when get_path() is run.
+    """
     post_tag::String = ""
+    "Timestamp template representing the generated filename prefix."
     timestamp_template::String="yyyy_mmdd_HHMMSS"
+    """
+    Date template representing the generated folder prefix.
+    Appropriate to automatically create daily collection folders.
+    """
     subfolder_template::Union{Nothing,AbstractString}="yyyy_mmdd"
+    """
+    Optional intermediate folder inside the daily subfolder for 
+    collecting multiple files from a single collection.
+    This is most helpful when each logical event is generating 
+    various data products.
+    The intermediate folder would not have a data component. It would 
+    be made up of a description, and a auto generated index.
+
+    The logic for picking the initial index, when to increment the index, 
+    and how to resume at the latest index, particularly on shared drives, 
+    has some subtlety.
+    """
     intermediate_template::Union{Nothing,AbstractString}=nothing
 end
 
