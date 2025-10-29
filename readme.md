@@ -102,3 +102,7 @@ Use `set_intermediate_stem!` to rename or remove the intermediate folder without
 4. When the intermediate folder naming scheme changes, call `set_intermediate_stem!` (or `set_intermediate_template!` for bespoke patterns). Supply `now=` if you need to anchor the change to a specific timestamp. Use `set_subfolder_template!` to reformat the date folder if needed.
 
 With these steps, you can focus on the data you are capturing while TimestampedPaths.jl keeps the filesystem tidy and predictable.
+
+## Sandaboxing
+Provisioned with
+https://github.com/ajtrowell/shared_julia_depot
