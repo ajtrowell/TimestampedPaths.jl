@@ -1,12 +1,13 @@
 export NamerConfig, NamerInterface, NamerState
-export date_folder_name, path_examples
+export date_folder_name, path_examples, api_demo, generate_new_path
 
 """
 # NamerConfig
 Path generating
 Case 1, no per collection folder.
-root_dir   /  date_folder/timestamped_file
-root_dir   /  date_folder/ yyyy_mmdd_HHMMSS_ stem
+root_dir   /  date_folder/file_timestamp
+
+./data_root/2025_/ yyyy_mmdd_HHMMSS_ stem
 /home/bob  / 2025_0120   / 2025_0120_223455_<pretag><tag><posttag>
 
 Case 2, per collection folder with index
@@ -37,12 +38,12 @@ $(TYPEDFIELDS)
     """
     post_tag::String = ""
     "Timestamp template representing the generated filename prefix."
-    timestamp_template::String="yyyy_mmdd_HHMMSS"
+    file_timestamp::String="yyyy_mmdd_HHMMSS"
     """
     Date template representing the generated folder prefix.
     Appropriate to automatically create daily collection folders.
     """
-    subfolder_template::Union{Nothing,AbstractString}="yyyy_mmdd"
+    date_folder::Union{Nothing,AbstractString}="yyyy_mmdd"
     """
     Optional intermediate folder inside the daily subfolder for 
     collecting multiple files from a single collection.
@@ -55,7 +56,7 @@ $(TYPEDFIELDS)
     and how to resume at the latest index, particularly on shared drives, 
     has some subtlety.
     """
-    intermediate_template::Union{Nothing,AbstractString}=nothing
+    collection_folder::Union{Nothing,AbstractString}=nothing
 end
 
 
@@ -64,9 +65,9 @@ function Base.show(io::IO, nc::NamerConfig)
     println(io, "    root_dir: ", nc.root_dir)
     println(io, "    pre_tag: ", nc.pre_tag)
     println(io, "    post_tag: ", nc.post_tag)
-    println(io, "    timestamp_template: ", nc.timestamp_template)
-    println(io, "    subfolder_template: ", nc.subfolder_template)
-    println(io, "    intermediate_template: ", nc.intermediate_template)
+    println(io, "file_timestamp: ", nc.file_timestamp)
+    println(io, "    date_folder: ", nc.date_folder)
+    println(io, "    collection_folder: ", nc.collection_folder)
     return nothing
 end
 
@@ -94,7 +95,8 @@ $(TYPEDFIELDS)
     "State for Namer."
     state::NamerState = NamerState()
     "Generate new name path with fresh date"
-    generate_path::Function = (tag::AbstractString)->"Undefined: $(tag)"
+    generate_path = (this_tag::String)-> generate_new_path(
+        config, state, date = Dates.now(), tag = this_tag)
     """
     Generate new name path with cached data from previous generate_path().
     This can be helpful when a collection is run, but generates multiple 
@@ -136,6 +138,18 @@ end
 # Create folder + file path string
 # Handle intermediate folder
 
+"""
+# generate_new_path()
+Returns a path based on NamerConfig.
+Ensures all intervening folder have been created.
+"""
+function generate_new_path(config::NamerConfig,state::NamerState; date::DateTime = Dates.now(), tag::String = "")::String
+    date_string = Dates.format(date, config.file_timestamp)
+    stem = "$(config.pre_tag)$(tag)$(config.post_tag)"
+    filename = date_string * stem 
+    
+    return filename
+end
 
 "Returns the date folder name, not the entire path."
 function date_folder_name(config::NamerConfig,state::NamerState; date::DateTime = Dates.now())::String
@@ -147,4 +161,10 @@ function path_examples()
     get_date_folder = (args...;kwargs...) -> date_folder_name(gen.config, gen.state, args..., kwargs...);
 
     return () -> (;gen, get_date_folder)
+end
+
+function api_demo()
+
+
+
 end
