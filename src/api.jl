@@ -57,6 +57,8 @@ $(TYPEDFIELDS)
     has some subtlety.
     """
     collection_folder::Union{Nothing,AbstractString} = nothing
+    "Minimum width of index appended to collection folder."
+    width_of_collection_index::Int64 = 2
 end
 
 const title_width = 30
@@ -68,6 +70,7 @@ function Base.show(io::IO, nc::NamerConfig)
     println(io, "    file_timestamp: ", nc.file_timestamp)
     println(io, "    date_folder: ", nc.date_folder)
     println(io, "    collection_folder: ", nc.collection_folder)
+    println(io, "    width_of_collection_index: ", nc.width_of_collection_index)
     return nothing
 end
 
@@ -119,6 +122,8 @@ $(TYPEDFIELDS)
             date = state.recent_datetime,
             tag = tag,
         )
+    "Manually advance collection folder index"
+    increment_collection_index = () -> state.folder_index += 1
 end
 
 
@@ -170,13 +175,25 @@ function generate_path_from_config_and_state(
     if isnothing(config.collection_folder)
         file_path = joinpath(root_folder, date_folder, file_name)
     else
-        file_path = joinpath(root_folder, date_folder, config.collection_folder, file_name)
+        collection_folder =
+            config.collection_folder *
+            "_" *
+            lpad(state.folder_index, config.width_of_collection_index, '0')
+        file_path = joinpath(root_folder, date_folder, collection_folder, file_name)
     end
 
     create_folders && mkpath(dirname(file_path))
 
     return file_path
 end
+
+# Collection Folder Index Utilities
+# A little trickier since the stem could change, and the indices could be 
+# duplicated if there is an error or a race.
+# Also, the initial NamerState.folder_index needs to be determied by 
+# scanning the folder.
+# If multiple systems are writting to a folder, there could be race conditions.
+
 
 
 
@@ -200,7 +217,15 @@ function api_demo()
     show(pathgen)
 
     @info fp1 = pathgen.generate_path("data_collect.dat")
+    sleep(1)
     @info fp2 = pathgen.generate_path_with_previous_date("meta_data.json")
 
-
+    @info "Starting collection_folder"
+    pathgen.config.collection_folder = "collection"
+    @info fp3 = pathgen.generate_path("data_collect.dat")
+    sleep(1)
+    @info fp4 = pathgen.generate_path("data_collect.dat")
+    sleep(1)
+    pathgen.increment_collection_index()
+    @info fp4 = pathgen.generate_path("data_collect.dat")
 end
