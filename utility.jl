@@ -1,15 +1,15 @@
 module TimestampedPathsPretty
 
 export indent_level,
-       indent_context,
-       print_indent,
-       print_indented,
-       println_indented,
-       show_block,
-       Indenter,
-       indenter,
-       indenter_context,
-       @define_shower
+    indent_context,
+    print_indent,
+    print_indented,
+    println_indented,
+    show_block,
+    Indenter,
+    indenter,
+    indenter_context,
+    @define_shower
 
 const INDENT_KEY = :timestampedpaths_indent
 const DEFAULT_STEP = 4
@@ -28,7 +28,7 @@ end
 
 Create a child `IOContext` with the indentation key increased by `extra`.
 """
-function indent_context(io::IO; extra::Integer=DEFAULT_STEP)
+function indent_context(io::IO; extra::Integer = DEFAULT_STEP)
     base = indent_level(io)
     new_level = max(base + Int(extra), 0)
     return IOContext(io, INDENT_KEY => new_level)
@@ -39,7 +39,7 @@ end
 
 Emit the current indentation (plus `extra`) as spaces on `io`.
 """
-function print_indent(io::IO; extra::Integer=0)
+function print_indent(io::IO; extra::Integer = 0)
     width = max(indent_level(io) + Int(extra), 0)
     width == 0 && return nothing
     print(io, repeat(" ", width))
@@ -51,8 +51,8 @@ end
 
 Print `args...` prefixed by the current indentation (plus `extra`) without a newline.
 """
-function print_indented(io::IO, args...; extra::Integer=0)
-    print_indent(io; extra=extra)
+function print_indented(io::IO, args...; extra::Integer = 0)
+    print_indent(io; extra = extra)
     print(io, args...)
     return nothing
 end
@@ -62,8 +62,8 @@ end
 
 Print `args...` prefixed by the current indentation (plus `extra`) and terminate the line.
 """
-function println_indented(io::IO, args...; extra::Integer=0)
-    print_indent(io; extra=extra)
+function println_indented(io::IO, args...; extra::Integer = 0)
+    print_indent(io; extra = extra)
     println(io, args...)
     return nothing
 end
@@ -74,9 +74,14 @@ end
 Emit `label` at the current indentation, then call `f` with an IO context whose
 indentation is increased by `extra`.
 """
-function show_block(io::IO, label::AbstractString, f::Function; extra::Integer=DEFAULT_STEP)
+function show_block(
+    io::IO,
+    label::AbstractString,
+    f::Function;
+    extra::Integer = DEFAULT_STEP,
+)
     println_indented(io, label)
-    inner_io = indent_context(io; extra=extra)
+    inner_io = indent_context(io; extra = extra)
     f(inner_io)
     return nothing
 end
@@ -96,8 +101,8 @@ end
 
 Helper constructor that bumps indentation once and returns an `Indenter`.
 """
-function indenter(io::IO; extra::Integer=0)
-    new_io = indent_context(io; extra=extra)
+function indenter(io::IO; extra::Integer = 0)
+    new_io = indent_context(io; extra = extra)
     return Indenter(new_io)
 end
 
@@ -111,8 +116,8 @@ end
 
 Create a nested context relative to the stored IO.
 """
-function indenter_context(ind::Indenter; extra::Integer=DEFAULT_STEP)
-    return indent_context(ind.io; extra=extra)
+function indenter_context(ind::Indenter; extra::Integer = DEFAULT_STEP)
+    return indent_context(ind.io; extra = extra)
 end
 
 """
@@ -128,9 +133,12 @@ macro define_shower(T)
             TimestampedPathsPretty.println_indented(io, string(type_label))
             inner_io = TimestampedPathsPretty.indent_context(io)
             for fname in fieldnames(typeof($value_sym))
-                TimestampedPathsPretty.println_indented(inner_io,
-                                                        string(fname), ": ",
-                                                        getfield($value_sym, fname))
+                TimestampedPathsPretty.println_indented(
+                    inner_io,
+                    string(fname),
+                    ": ",
+                    getfield($value_sym, fname),
+                )
             end
             return nothing
         end

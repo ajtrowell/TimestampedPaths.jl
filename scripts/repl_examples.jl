@@ -31,7 +31,11 @@ set_intermediate_stem!(secondary_config, "set"; now = start_time)
 primary_paths = PathGenerator(primary_config)
 secondary_paths = PathGenerator(secondary_config)
 
-function print_collection_state(name::AbstractString, paths::PathGenerator; now = Dates.now())
+function print_collection_state(
+    name::AbstractString,
+    paths::PathGenerator;
+    now = Dates.now(),
+)
     config = paths.config
     file_example = paths(tag = name, now = now)
     println("[$name] index=$(config.state.current) folder=$(dirname(file_example))")
@@ -59,7 +63,8 @@ Helper utilities:
 print_collection_state("primary", primary_paths; now = start_time)
 print_collection_state("secondary", secondary_paths; now = start_time)
 
-println("""
+println(
+    """
 Suggested experiments:
   * create_next_output_directory!(primary_config)
   * sync_to_latest_index!(secondary_config)
@@ -69,7 +74,8 @@ Suggested experiments:
   * set_subfolder_template!(primary_config, "yyyymmdd"; now=DateTime(2024, 10, 12))
 
 Use Ctrl+D (or exit()) to leave the REPL.
-""")
+""",
+)
 
 function write_to_file(filename::String, msg::AbstractString = "File write")
     open((io)->write(io, msg), filename, "w")

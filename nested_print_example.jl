@@ -43,14 +43,8 @@ function show(io::IO, interface::DemoInterface)
     return nothing
 end
 
-function run_demo(io::IO=stdout)
-    config = DemoConfig(
-        "data/output",
-        "pre_",
-        "_post",
-        "yyyy_mmdd_HHMMSS",
-        "yyyy_mmdd",
-    )
+function run_demo(io::IO = stdout)
+    config = DemoConfig("data/output", "pre_", "_post", "yyyy_mmdd_HHMMSS", "yyyy_mmdd")
     state = DemoState(Date(2024, 1, 31))
     interface = DemoInterface(config, state)
     show(io, MIME"text/plain"(), interface)
