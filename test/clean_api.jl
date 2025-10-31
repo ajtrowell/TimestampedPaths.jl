@@ -1,6 +1,6 @@
 
 # Tests for new api
-@testset "New API"
+@testset "New API" begin
     generator::NamerInterface = NamerInterface()
     generator.config.root_dir = "."
     generator.config.pre_tag = "pre_tag_"

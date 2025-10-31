@@ -1,5 +1,5 @@
 export NamerConfig, NamerInterface, NamerState
-export date_folder_name, path_examples, api_demo, generate_new_path
+export path_examples, api_demo, generate_path
 
 """
 # NamerConfig
@@ -38,12 +38,12 @@ $(TYPEDFIELDS)
     """
     post_tag::String = ""
     "Timestamp template representing the generated filename prefix."
-    file_timestamp::String="yyyy_mmdd_HHMMSS"
+    file_timestamp::String = "yyyy_mmdd_HHMMSS"
     """
     Date template representing the generated folder prefix.
     Appropriate to automatically create daily collection folders.
     """
-    date_folder::Union{Nothing,AbstractString}="yyyy_mmdd"
+    date_folder::Union{Nothing,AbstractString} = "yyyy_mmdd"
     """
     Optional intermediate folder inside the daily subfolder for 
     collecting multiple files from a single collection.
@@ -56,16 +56,16 @@ $(TYPEDFIELDS)
     and how to resume at the latest index, particularly on shared drives, 
     has some subtlety.
     """
-    collection_folder::Union{Nothing,AbstractString}=nothing
+    collection_folder::Union{Nothing,AbstractString} = nothing
 end
 
-
+const title_width = 30
 function Base.show(io::IO, nc::NamerConfig)
-    println(io, "Namer Config")
+    println(io, rpad("Namer Config  ", title_width, '-'))
     println(io, "    root_dir: ", nc.root_dir)
     println(io, "    pre_tag: ", nc.pre_tag)
     println(io, "    post_tag: ", nc.post_tag)
-    println(io, "file_timestamp: ", nc.file_timestamp)
+    println(io, "    file_timestamp: ", nc.file_timestamp)
     println(io, "    date_folder: ", nc.date_folder)
     println(io, "    collection_folder: ", nc.collection_folder)
     return nothing
@@ -80,7 +80,9 @@ $(TYPEDFIELDS)
 """
 @kwdef mutable struct NamerState
     "Most recent date time. Used when cached date time is desired."
-    recent_datetime::Date = Dates.now()
+    recent_datetime::DateTime = Dates.now()
+    "Collection folder index [used only if collection_folder is defined]"
+    folder_index::Int64 = 1
 end
 
 
@@ -95,8 +97,14 @@ $(TYPEDFIELDS)
     "State for Namer."
     state::NamerState = NamerState()
     "Generate new name path with fresh date"
-    generate_path = (this_tag::String)-> generate_new_path(
-        config, state, date = Dates.now(), tag = this_tag)
+    generate_path =
+        (tag::String = ""; kwargs...) -> generate_path_from_config_and_state(
+            config,
+            state;
+            date = Dates.now(),
+            tag = tag,
+            kwargs...,
+        )
     """
     Generate new name path with cached data from previous generate_path().
     This can be helpful when a collection is run, but generates multiple 
@@ -104,26 +112,25 @@ $(TYPEDFIELDS)
     It can be helpful to have the same timestamp for a group of 
     associated files, and this lets them use a recently cached time.
     """
-    generate_path_with_previous_date::Function = (tag::AbstractString)->"Undefined: $(tag)  $(state.recent_datetime)"
+    generate_path_with_previous_date =
+        (tag::String = "") -> generate_path_from_config_and_state(
+            config,
+            state;
+            date = state.recent_datetime,
+            tag = tag,
+        )
 end
 
 
 
 
 function Base.show(io::IO, ni::NamerInterface)
-    println(io, "Namer Interface")
-    println(io, "    config: ", ni.config)
-    println(io, "    state: ", ni.state)
+    println(io, rpad("Namer Interface  ", title_width, '-'))
+    println(io, "    config: \n", ni.config)
+    println(io, "    state: \n", ni.state)
+    println(io, "")
     println(io, "    generate_path(tag::String): ")
     println(io, "    generate_path_with_previous_date(tag::String): ")
-#=
-    println(io, "    RPC: ",
-        REPE.isconnected(sh.embedded) ? "Connected" : "Disconnected"
-    )
-    println(io, "    RDMA: ",
-        is_running(sh.rdma_adapter) ? "Connected" : "Disconnected"
-    )
-=#
     return nothing
 end
 
@@ -139,32 +146,61 @@ end
 # Handle intermediate folder
 
 """
-# generate_new_path()
+# generate_path_from_config_and_state
 Returns a path based on NamerConfig.
 Ensures all intervening folder have been created.
 """
-function generate_new_path(config::NamerConfig,state::NamerState; date::DateTime = Dates.now(), tag::String = "")::String
+function generate_path_from_config_and_state(
+    config::NamerConfig,
+    state::NamerState;
+    date::DateTime = Dates.now(),
+    tag::String = "",
+    create_folders = true,
+)::String
+    state.recent_datetime = date
     date_string = Dates.format(date, config.file_timestamp)
     stem = "$(config.pre_tag)$(tag)$(config.post_tag)"
-    filename = date_string * stem 
-    
-    return filename
+    file_name = date_string * stem
+
+    # Expand user turns ~ to path to user home
+    root_folder = expanduser(config.root_dir)
+    date_folder = Dates.format(date, config.date_folder)
+
+    # Join paths. Only include collection folder if present.
+    if isnothing(config.collection_folder)
+        file_path = joinpath(root_folder, date_folder, file_name)
+    else
+        file_path = joinpath(root_folder, date_folder, config.collection_folder, file_name)
+    end
+
+    create_folders && mkpath(dirname(file_path))
+
+    return file_path
 end
 
-"Returns the date folder name, not the entire path."
-function date_folder_name(config::NamerConfig,state::NamerState; date::DateTime = Dates.now())::String
-    return ""
-end
+
 
 function path_examples()
     gen = NamerInterface()
-    get_date_folder = (args...;kwargs...) -> date_folder_name(gen.config, gen.state, args..., kwargs...);
+    get_date_folder =
+        (args...; kwargs...) -> date_folder_name(gen.config, gen.state, args..., kwargs...)
 
-    return () -> (;gen, get_date_folder)
+    return () -> (; gen, get_date_folder)
 end
 
 function api_demo()
+    pathgen::NamerInterface = NamerInterface()
+    println("PWD: $(pwd())")
+    pathgen.config.root_dir = "./demo_data/"
+    pathgen.config.pre_tag = "_pretag_"
+    pathgen.config.post_tag = ""
+    pathgen.config.collection_folder = nothing
 
+    # println("NamerInterface:")
+    show(pathgen)
+
+    @info fp1 = pathgen.generate_path("data_collect.dat")
+    @info fp2 = pathgen.generate_path_with_previous_date("meta_data.json")
 
 
 end
