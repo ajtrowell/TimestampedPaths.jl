@@ -1,5 +1,9 @@
+# Primary Interface
 export NamerConfig, NamerInterface, NamerState
-export path_examples, api_demo, generate_path
+export set_next_collection_index!
+
+# Demos
+export api_demo
 
 """
 # NamerConfig
@@ -98,7 +102,7 @@ $(TYPEDFIELDS)
     "Configuration for Namer."
     config::NamerConfig = NamerConfig()
     "State for Namer."
-    state::NamerState = NamerState()
+    state::NamerState = NamerState(folder_index = find_next_collection_index(config))
     "Generate new name path with fresh date"
     generate_path =
         (tag::String = ""; kwargs...) -> generate_path_from_config_and_state(
@@ -116,14 +120,17 @@ $(TYPEDFIELDS)
     associated files, and this lets them use a recently cached time.
     """
     generate_path_with_previous_date =
-        (tag::String = "") -> generate_path_from_config_and_state(
+        (tag::String = ""; kwargs...) -> generate_path_from_config_and_state(
             config,
             state;
             date = state.recent_datetime,
             tag = tag,
+            kwargs...,
         )
     "Manually advance collection folder index"
     increment_collection_index = () -> state.folder_index += 1
+    ""
+    scan_and_set_collection_index = () -> set_next_collection_index!(state, config)
 end
 
 
@@ -136,6 +143,7 @@ function Base.show(io::IO, ni::NamerInterface)
     println(io, "")
     println(io, "    generate_path(tag::String): ")
     println(io, "    generate_path_with_previous_date(tag::String): ")
+    println(io, "    increment_collection_index(): ")
     return nothing
 end
 
@@ -152,8 +160,16 @@ end
 
 """
 # generate_path_from_config_and_state
+
+Combines lots of options for different use cases, 
+somewhat confusing for that. Intended to be a lower level helper 
+that functions are defined around to expose a particular 
+subset of these functions, consisten with a workflow.
+
 Returns a path based on NamerConfig.
-Ensures all intervening folder have been created.
+Ensures all intervening folder have been created. [option]
+tag is the easy to change part of the name.
+<timestamp><pretag><tag><posttag>
 """
 function generate_path_from_config_and_state(
     config::NamerConfig,
@@ -162,7 +178,10 @@ function generate_path_from_config_and_state(
     tag::String = "",
     create_folders = true,
 )::String
+    # state mutation
     state.recent_datetime = date
+
+    # file_name
     date_string = Dates.format(date, config.file_timestamp)
     stem = "$(config.pre_tag)$(tag)$(config.post_tag)"
     file_name = date_string * stem
@@ -281,8 +300,39 @@ end
 "Return 1 + highest collection index found in given path."
 function find_next_collection_index(parent::AbstractString)::Int
     (; max_index) = find_highest_collection_index_info(parent)
-    return 1 + max_index
+    if isnothing(max_index)
+        return 1
+    else
+        return 1 + max_index
+    end
 end
+
+"""
+Return 1 + highest collection index found in given path.
+"""
+function find_next_collection_index(config::NamerConfig)::Int
+    date_folder_path = get_date_folder_path(config)
+    next_index = find_next_collection_index(date_folder_path)
+    return next_index
+end
+
+"""
+# set_next_collection_index!(NamerInterface)
+# set_next_collection_index!(NamerState, NamerConfig)
+If config root_dir path is adjusted, the index 
+may be invalidated.  Run to scan new folder for the highest index, 
+and set the state.folder_index to one more.
+"""
+function set_next_collection_index!(state::NamerState, config::NamerConfig)
+    next_index = find_next_collection_index(config)
+    state.folder_index = next_index
+end
+
+set_next_collection_index!(interface::NamerInterface) =
+    set_next_collection_index!(interface.state, interface.config)
+
+
+
 
 # Example code
 
@@ -292,13 +342,6 @@ function touch_file(file_path::AbstractString)
     end
 end
 
-function path_examples()
-    gen = NamerInterface()
-    get_date_folder =
-        (args...; kwargs...) -> date_folder_name(gen.config, gen.state, args..., kwargs...)
-
-    return () -> (; gen, get_date_folder)
-end
 
 function api_demo()
     pathgen::NamerInterface = NamerInterface()
@@ -307,6 +350,7 @@ function api_demo()
     pathgen.config.pre_tag = "_pretag_"
     pathgen.config.post_tag = ""
     pathgen.config.collection_folder = nothing
+    set_next_collection_index!(pathgen)
 
     # println("NamerInterface:")
     show(pathgen)
@@ -333,6 +377,10 @@ function api_demo()
 
     date_folder_path = get_date_folder_path(pathgen.config)
     next_index = find_next_collection_index(date_folder_path)
+    #next_index = find_next_collection_index(pathgen.config)
     @info "Next Index: $(next_index)"
 
+
+    other_next_index = find_next_collection_index(pathgen.config)
+    @info "Other Next Index: $(other_next_index)"
 end
