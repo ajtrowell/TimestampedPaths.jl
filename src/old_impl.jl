@@ -604,6 +604,3 @@ function _extract_date_component(ts::String)
     m === nothing && return ts
     return m.match
 end
-
-
-

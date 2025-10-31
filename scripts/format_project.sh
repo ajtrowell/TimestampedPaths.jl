@@ -7,6 +7,6 @@ cd "$script_dir/.."
 echo "Project Directory:  $(pwd)"
 
 julia --project=. -e 'using JuliaFormatter, TimestampedPaths;
-format(".")
+format("./src")
 '
 

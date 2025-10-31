@@ -1,3 +1,7 @@
+using Dates
+using DocStringExtensions
+
+
 # Primary Interface
 export NamerConfig, NamerInterface, NamerState
 export set_next_collection_index!
@@ -107,6 +111,9 @@ $(TYPEDFIELDS)
     generate_path =
         (tag::String = ""; kwargs...) ->
             generate_path_from_config_and_state(config, state; tag = tag, kwargs...)
+    "Utility for working with collection folders, and reusing datetime for related files."
+    cache_datetime_and_set_next_collection_index =
+        () -> update_cached_date_and_index!(state, config)
     """
     Generate new name path with cached data from previous generate_path().
     This can be helpful when a collection is run, but generates multiple 
@@ -152,6 +159,7 @@ end
 # Create folder path string
 # Create folder + file path string
 # Handle intermediate folder
+
 
 """
 # generate_path_from_config_and_state
@@ -213,7 +221,23 @@ function generate_path_from_config_and_state(
     return file_path
 end
 
+"""
+# update_cached_date_and_index
+Helper for using indexed collection folders.
+Gives a procedural way to designate a new collection.
 
+Doesn't create folders or return paths.
+Only caches the current datetime and increments the 
+collection folder index to the next number.
+Return data just for status.
+"""
+function update_cached_date_and_index!(state::NamerState, config::NamerConfig)
+    datetime = Dates.now()
+    state.recent_datetime = datetime
+    folder_index = set_next_collection_index!(state, config)
+    return (; datetime, folder_index) # Status only.
+
+end
 
 
 """
