@@ -1,3 +1,4 @@
+export set_log_level!, log_info, log_debug
 
 const _LOG_LEVEL = Ref{LogLevel}(Logging.Warn)
 
