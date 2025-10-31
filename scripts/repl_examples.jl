@@ -5,8 +5,8 @@ using TimestampedPaths
 
 set_log_level!(Logging.Info)
 
-demo_root = joinpath(pwd(), "demo_outputs")
 start_time = DateTime(2024, 10, 11, 9, 0)
+demo_root = joinpath(pwd(), "demo_data")
 
 primary_config = Config(
     root_dir = demo_root,
@@ -65,18 +65,18 @@ print_collection_state("secondary", secondary_paths; now = start_time)
 
 println(
     """
-Suggested experiments:
-  * create_next_output_directory!(primary_config)
-  * sync_to_latest_index!(secondary_config)
-  * ensure_collection_path!(primary_config)
-  * increment_index!(secondary_config)
-  * set_intermediate_stem!(primary_config, "calibration"; now=DateTime(2024, 10, 11, 9, 30))
-  * set_subfolder_template!(primary_config, "yyyymmdd"; now=DateTime(2024, 10, 12))
+  Suggested experiments:
+    * create_next_output_directory!(primary_config)
+    * sync_to_latest_index!(secondary_config)
+    * ensure_collection_path!(primary_config)
+    * increment_index!(secondary_config)
+    * set_intermediate_stem!(primary_config, "calibration"; now=DateTime(2024, 10, 11, 9, 30))
+    * set_subfolder_template!(primary_config, "yyyymmdd"; now=DateTime(2024, 10, 12))
 
-Use Ctrl+D (or exit()) to leave the REPL.
-""",
+  Use Ctrl+D (or exit()) to leave the REPL.
+  """,
 )
 
 function write_to_file(filename::String, msg::AbstractString = "File write")
-    open((io)->write(io, msg), filename, "w")
+    open((io) -> write(io, msg), filename, "w")
 end

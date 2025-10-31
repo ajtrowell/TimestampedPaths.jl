@@ -58,7 +58,7 @@ $(TYPEDFIELDS)
     """
     collection_folder::Union{Nothing,AbstractString} = nothing
     "Minimum width of index appended to collection folder."
-    width_of_collection_index::Int64 = 2
+    width_of_collection_index::Int = 2
 end
 
 const title_width = 30
@@ -85,7 +85,7 @@ $(TYPEDFIELDS)
     "Most recent date time. Used when cached date time is desired."
     recent_datetime::DateTime = Dates.now()
     "Collection folder index [used only if collection_folder is defined]"
-    folder_index::Int64 = 1
+    folder_index::Int = 1
 end
 
 
@@ -187,6 +187,32 @@ function generate_path_from_config_and_state(
     return file_path
 end
 
+
+
+
+"""
+# get_date_folder_path
+Returns a date folder path based on NamerConfig.
+Ensures all intervening folder have been created.
+Used when the date folder path is desired, not a file path.
+"""
+function get_date_folder_path(config::NamerConfig, create_folders = true)::String
+
+    date = Dates.now()
+
+    # Expand user turns ~ to path to user home
+    root_folder = expanduser(config.root_dir)
+    date_folder = Dates.format(date, config.date_folder)
+
+    # Join paths. Only include collection folder if present.
+    date_folder_path = joinpath(root_folder, date_folder)
+    # Conditionally create folders
+    create_folders && mkpath(date_folder_path)
+
+    return date_folder_path
+end
+
+
 # Collection Folder Index Utilities
 # A little trickier since the stem could change, and the indices could be 
 # duplicated if there is an error or a race.
@@ -194,8 +220,77 @@ end
 # scanning the folder.
 # If multiple systems are writting to a folder, there could be race conditions.
 
+"""
+# find_highest_collection_index_info(parent::AbstractString)
+Search folders in given path for any ending in the pattern
+<base>_<index>
+Return the highest index found, and a list of the bases.
+In general, the max_index is all we need to know, as we 
+typically just want to set our folder_index to one higher.
+It may be useful to know in some cases whether there is a 
+duplicate index on a different base.
+"""
+function find_highest_collection_index_info(parent::AbstractString)
+
+    pattern = r"^(.*)_(\d+)$"
+    # We'll track:
+    # max_idx::Int or nothing if none found
+    # bases_for_max::Set{String} of bases that use max_idx
+    max_idx = nothing
+    bases_for_max = Set{String}()
+
+    for path in filter(isdir, readdir(expanduser(parent); join = true))
+        name = basename(path)
+        m = match(pattern, name)
+        m === nothing && continue
+
+        base = m.captures[1]
+        idx = parse(Int, m.captures[2])
+
+        if max_idx === nothing || idx > max_idx
+            # new global max → reset the set
+            max_idx = idx
+            empty!(bases_for_max)
+            push!(bases_for_max, base)
+        elseif idx == max_idx
+            # same as current max → add this base too
+            push!(bases_for_max, base)
+        end
+    end
+
+    # Build a nice result struct/dict
+    if max_idx === nothing
+        return (
+            found_any = false,
+            max_index = nothing,
+            bases = String[],
+            multi_base = false,
+        )
+    else
+        bases_vec = collect(bases_for_max)
+        return (
+            found_any = true,
+            max_index = max_idx,
+            bases = bases_vec,
+            multi_base = length(bases_vec) > 1,
+        )
+    end
+end
 
 
+"Return 1 + highest collection index found in given path."
+function find_next_collection_index(parent::AbstractString)::Int
+    (; max_index) = find_highest_collection_index_info(parent)
+    return 1 + max_index
+end
+
+# Example code
+
+function touch_file(file_path::AbstractString)
+    open(file_path, "w") do io
+        println(io, "")
+    end
+end
 
 function path_examples()
     gen = NamerInterface()
@@ -216,16 +311,28 @@ function api_demo()
     # println("NamerInterface:")
     show(pathgen)
 
-    @info fp1 = pathgen.generate_path("data_collect.dat")
+    files = String[]
+    push!(files, pathgen.generate_path("data_collect.dat"))
     sleep(1)
-    @info fp2 = pathgen.generate_path_with_previous_date("meta_data.json")
+    push!(files, pathgen.generate_path_with_previous_date("meta_data.json"))
 
     @info "Starting collection_folder"
     pathgen.config.collection_folder = "collection"
-    @info fp3 = pathgen.generate_path("data_collect.dat")
+    push!(files, pathgen.generate_path("data_collect.dat"))
     sleep(1)
-    @info fp4 = pathgen.generate_path("data_collect.dat")
+    push!(files, pathgen.generate_path("data_collect.dat"))
     sleep(1)
     pathgen.increment_collection_index()
-    @info fp4 = pathgen.generate_path("data_collect.dat")
+    push!(files, pathgen.generate_path("data_collect.dat"))
+
+    # Display and save
+    for file in files
+        @info file
+        touch_file(file)
+    end
+
+    date_folder_path = get_date_folder_path(pathgen.config)
+    next_index = find_next_collection_index(date_folder_path)
+    @info "Next Index: $(next_index)"
+
 end

@@ -4,7 +4,7 @@ using Logging
 
 TP.set_log_level!(Logging.Info)
 
-demo_root = joinpath(pwd(), "demo_outputs")
+demo_root = joinpath(pwd(), "demo_data")
 
 namer_config = TP.Config(
     root_dir = demo_root,
@@ -18,5 +18,5 @@ namer_config = TP.Config(
 path_generator = TP.PathGenerator(namer_config)
 
 function write_to_file(filename::String, msg::AbstractString = "File write")
-    open((io)->write(io, msg), filename, "w")
+    open((io) -> write(io, msg), filename, "w")
 end
