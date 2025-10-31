@@ -1,7 +1,7 @@
 name = "TimestampedPaths"
 uuid = "ef946245-2123-4c5d-86bd-2dd9af640e77"
 authors = ["Ashley Trowell"]
-version = "0.1.2"
+version = "0.2.0"
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"

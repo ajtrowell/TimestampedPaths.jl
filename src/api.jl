@@ -105,13 +105,8 @@ $(TYPEDFIELDS)
     state::NamerState = NamerState(folder_index = find_next_collection_index(config))
     "Generate new name path with fresh date"
     generate_path =
-        (tag::String = ""; kwargs...) -> generate_path_from_config_and_state(
-            config,
-            state;
-            date = Dates.now(),
-            tag = tag,
-            kwargs...,
-        )
+        (tag::String = ""; kwargs...) ->
+            generate_path_from_config_and_state(config, state; tag = tag, kwargs...)
     """
     Generate new name path with cached data from previous generate_path().
     This can be helpful when a collection is run, but generates multiple 
@@ -123,7 +118,7 @@ $(TYPEDFIELDS)
         (tag::String = ""; kwargs...) -> generate_path_from_config_and_state(
             config,
             state;
-            date = state.recent_datetime,
+            reuse_cached_datetime = true,
             tag = tag,
             kwargs...,
         )
@@ -168,18 +163,30 @@ subset of these functions, consisten with a workflow.
 
 Returns a path based on NamerConfig.
 Ensures all intervening folder have been created. [option]
-tag is the easy to change part of the name.
+`tag` is the easy to change part of the name.
 <timestamp><pretag><tag><posttag>
+`reuse_cached_datetime` defaults to false.  
+When reuse is false, it checks the current Dates.now() on each call. 
+When reuse is it is true, it uses the cached date.
+Useful when caller wants a group of files with the same timestamp.
 """
 function generate_path_from_config_and_state(
     config::NamerConfig,
     state::NamerState;
-    date::DateTime = Dates.now(),
+    reuse_cached_datetime = false,
     tag::String = "",
     create_folders = true,
 )::String
-    # state mutation
-    state.recent_datetime = date
+
+    # Date: cached or new?
+    # Nice if caller wants a group of files with the same timestamp.
+    if reuse_cached_datetime
+        date = state.recent_datetime
+    else
+        date = Dates.now()
+        state.recent_datetime = date
+    end
+
 
     # file_name
     date_string = Dates.format(date, config.file_timestamp)
@@ -357,7 +364,7 @@ function api_demo()
 
     files = String[]
     push!(files, pathgen.generate_path("data_collect.dat"))
-    sleep(1)
+    sleep(2)
     push!(files, pathgen.generate_path_with_previous_date("meta_data.json"))
 
     @info "Starting collection_folder"
