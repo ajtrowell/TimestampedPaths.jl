@@ -1,108 +1,87 @@
 # TimestampedPaths.jl
 
-Utilities for building reproducible, timestamped directory structures and filenames in Julia. The main goal is to point data acquisition jobs at a single root directory and let the package manage the daily folders, sequential indices, and standardized filenames.
+`NamerInterface` provides a compact workflow for building timestamped folder structures and filenames. Point it at a root directory, configure optional prefixes/suffixes, and it will keep the daily folders and collection indices tidy while you focus on writing data.
 
 ## Installation
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/ashley/TimestampedPaths.jl")
+Pkg.add(url = "https://github.com/ashley/TimestampedPaths.jl")
 ```
 
-The package is lightweight and only depends on the Julia standard library (`Dates` and `Logging`).
+## Path anatomy
 
-## TLDR; simple workflow - in development
-To just get date stamped folders with time stamped files, 
-here is a minimal workflow.
+Each generated path is composed of four pieces:
+
+1. **Root directory** – `config.root_dir`, expanded with `~` if present.
+2. **Date folder** – formatted with `config.date_folder` (defaults to `"yyyy_mmdd"`). Set to `nothing` to skip the date layer.
+3. **Optional collection folder** – only present when `config.collection_folder` is a string. The name is `"<collection_folder>_<index>"` where the index is zero-padded to `config.width_of_collection_index`.
+4. **Filename** – `Dates.format(now, config.file_timestamp) * config.pre_tag * tag * config.post_tag`. The `tag` argument is supplied when you request a path, and the timestamp can be cached for follow-up files.
+
+Example layout:
+
+```
+/data_root/
+└── 2025_0120/
+    └── capture_003/
+        └── 2025_0120_223455_pre_temperature_post.dat
+```
+
+## Quick start
+
 ```julia
 using TimestampedPaths
-TP = TimestampedPaths
 
-path_generator = TP.PathGenerator(TP.Config(root_dir="./data",extension=".dat"))
-new_path = path_generator(tag="file_name_stem");
-```
-
-## Core ideas
-
-- **Config** – describes how paths are generated (root directory, timestamp format, optional intermediate folder template, file extension, suffixes, etc.) and owns a mutable indexing state accessible as `config.state`.
-- **IndexState** – still available when you need additional independent state objects (for example, a bespoke synchronization strategy), but most code can rely on the state that ships with each `Config`.
-- **Helper functions** – `current_collection_path`, `ensure_collection_path!`, `get_file_path`, and `create_next_output_directory!` handle the repetitive pieces of path management. `PathGenerator` wraps a `Config` and exposes a callable that yields fresh paths on demand.
-
-To keep the derived state in sync when you tweak the intermediate template, use `set_intermediate_stem!` for stem-based names (it builds the padding for you) or `set_intermediate_template!` if you need full control over the placeholder string. Use `set_subfolder_template!` only when you want to change the date folder format.
-
-## Usage examples
-
-### Sequential files without an intermediate folder
-
-The simplest workflow relies on a root directory and formatted timestamp. Calling `get_file_path` with an optional tag produces sequential filenames.
-
-```julia
-using Dates
-using TimestampedPaths
-
-config = Config(
-    root_dir = "data",
-    timestamp_template = "yyyy-mm-dd_HHMMSS",
-    intermediate_template = nothing,  # no intermediate folder
-    extension = ".dat"
+namer = NamerInterface(
+    config = NamerConfig(
+        root_dir = "./data",
+        pre_tag = "_pre_",
+        post_tag = "_post.dat",
+        collection_folder = "capture",
+        width_of_collection_index = 3,
+    ),
 )
 
-paths = PathGenerator(config)
-
-# Ensure today's folder exists and get the first file path.
-filepath = paths()
-tagged = paths(tag="raw")
-
-# -> data/2024-05-25/2024-05-25_103000_raw.dat
+path = namer.generate_path("thermocouple")
 ```
 
-This pattern is ideal when you only need timestamped files and are comfortable sharing a single directory per day.
+This will create any missing directories and return a full path such as
+`./data/2025_0120/capture_001/2025_0120_223455_pre_thermocouple_post.dat`.
 
-### Intermediate folders with sequential numbering
+### Reusing timestamps within a collection
 
-For richer organization, supply an intermediate template with `#` placeholders. You can adjust the template at runtime to reflect the current collection or experiment.
+`generate_path_with_previous_date` keeps the most recent timestamp so related files share the same prefix.
 
 ```julia
-config = Config(
-    root_dir = "data",
-    timestamp_template = "yyyy-mm-dd_HHMMSS",
-    intermediate_template = "run_##",
-    extension = ".bin"
-)
-
-paths = PathGenerator(config)
-
-first_dir = ensure_collection_path!(config)
-# -> data/2024-05-25/run_01
-
-next_dir = create_next_output_directory!(config)
-# -> data/2024-05-25/run_02
-
-# Highlight a special collection by swapping the intermediate template.
-set_intermediate_stem!(config, "calibration")
-calibration_dir = create_next_output_directory!(config)
-# -> data/2024-05-25/calibration_01
+first = namer.generate_path("raw")
+second = namer.generate_path_with_previous_date("metadata")
 ```
 
-Use `set_intermediate_stem!` to rename or remove the intermediate folder without thinking about `#` placeholders (pass `nothing` to disable it). The helper recalculates the padding width, bumps the index so the next run picks up cleanly, and keeps subsequent calls consistent. For bespoke patterns, fall back to `set_intermediate_template!`. Reach for `set_subfolder_template!` if you only need to change the outer date folder.
+### Managing collection indices
 
-## Features at a glance
+`NamerState` tracks `folder_index`. Call `namer.increment_collection_index()` to advance manually, or `namer.scan_and_set_collection_index()` to rescan the filesystem and resume after the highest existing suffix. Construction performs one scan automatically when a collection folder is configured.
 
-- Timestamp-first directory layout (`root/YYYY-MM-DD[/intermediate]`).
-- Coordinated indexing across multiple processes with filesystem discovery.
-- Flexible file naming with optional suffixes and ad-hoc tags.
-- Mutable configuration for on-the-fly folder template changes.
-- Lightweight logging controls via `set_log_level!`, `log_info`, and `log_debug`.
+## Configuration reference
 
-## Recommended workflow
+- `root_dir` – where all dated folders live. Use absolute paths or strings with `~`.
+- `file_timestamp` – timestamp pattern for filenames (`"yyyy_mmdd_HHMMSS"` by default).
+- `date_folder` – pattern for the date layer (always required).
+- `collection_folder` – base name for per-collection folders; omit or set to `nothing` to write files directly inside the date folder.
+- `width_of_collection_index` – padding for the numeric suffix that follows the collection folder base.
+- `pre_tag` / `post_tag` – static text wrapped around the per-file `tag` argument.
 
-1. Create a `Config` per data collection root (or per worker if you prefer isolated state). Each `Config` carries its active `IndexState` at `config.state`.
-2. Call `ensure_collection_path!` or `create_next_output_directory!` before writing files.
-3. Generate filenames with `get_file_path` (it now ensures directories automatically) or keep a `PathGenerator` handy for repeated calls; optionally pass a tag to categorize the file.
-4. When the intermediate folder naming scheme changes, call `set_intermediate_stem!` (or `set_intermediate_template!` for bespoke patterns). Supply `now=` if you need to anchor the change to a specific timestamp. Use `set_subfolder_template!` to reformat the date folder if needed.
+## Logging helpers
 
-With these steps, you can focus on the data you are capturing while TimestampedPaths.jl keeps the filesystem tidy and predictable.
+`set_log_level!(Logging.Info)` adjusts the module-wide log threshold. `log_info("message")` and `log_debug("...")` only emit when the requested level meets the current threshold (wrapping Julia’s `@info` / `@debug`).
 
-## Sandaboxing
-Provisioned with
-https://github.com/ajtrowell/shared_julia_depot
+## Developing / testing
+
+Run the test suite via the repo helper script:
+
+```bash
+scripts/agent/run-tests.sh
+```
+
+## Sandbox
+
+This repository vendors a Julia depot via [`scripts/agent/run-julia.sh`](scripts/agent/run-julia.sh), keeping dependencies local to the project.

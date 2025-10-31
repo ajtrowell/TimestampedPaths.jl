@@ -47,7 +47,7 @@ $(TYPEDFIELDS)
     Date template representing the generated folder prefix.
     Appropriate to automatically create daily collection folders.
     """
-    date_folder::Union{Nothing,AbstractString} = "yyyy_mmdd"
+    date_folder::AbstractString = "yyyy_mmdd"
     """
     Optional intermediate folder inside the daily subfolder for 
     collecting multiple files from a single collection.
