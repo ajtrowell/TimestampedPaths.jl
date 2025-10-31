@@ -121,7 +121,7 @@ $(TYPEDFIELDS)
     It can be helpful to have the same timestamp for a group of 
     associated files, and this lets them use a recently cached time.
     """
-    generate_path_with_previous_date =
+    generate_path_with_cached_timestamp =
         (tag::String = ""; kwargs...) -> generate_path_from_config_and_state(
             config,
             state;
@@ -144,7 +144,7 @@ function Base.show(io::IO, ni::NamerInterface)
     println(io, "    state: \n", ni.state)
     println(io, "")
     println(io, "    generate_path(tag::String): ")
-    println(io, "    generate_path_with_previous_date(tag::String): ")
+    println(io, "    generate_path_with_cached_timestamp(tag::String): ")
     println(io, "    increment_collection_index(): ")
     return nothing
 end
@@ -389,7 +389,7 @@ function api_demo()
     files = String[]
     push!(files, pathgen.generate_path("data_collect.dat"))
     sleep(2)
-    push!(files, pathgen.generate_path_with_previous_date("meta_data.json"))
+    push!(files, pathgen.generate_path_with_cached_timestamp("meta_data.json"))
 
     @info "Starting collection_folder"
     pathgen.config.collection_folder = "collection"

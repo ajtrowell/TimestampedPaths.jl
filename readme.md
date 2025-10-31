@@ -50,11 +50,11 @@ This will create any missing directories and return a full path such as
 
 ### Reusing timestamps within a collection
 
-`generate_path_with_previous_date` keeps the most recent timestamp so related files share the same prefix.
+`generate_path_with_cached_timestamp` keeps the most recent timestamp so related files share the same prefix.
 
 ```julia
 first = namer.generate_path("raw")
-second = namer.generate_path_with_previous_date("metadata")
+second = namer.generate_path_with_cached_timestamp("metadata")
 ```
 
 ### Managing collection indices

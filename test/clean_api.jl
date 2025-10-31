@@ -44,7 +44,7 @@
             @test second_dt >= first_dt
 
             sleep(0.01)
-            cached_path = ni.generate_path_with_previous_date("c")
+            cached_path = ni.generate_path_with_cached_timestamp("c")
             cached_dt = ni.state.recent_datetime
 
             @test cached_dt == second_dt
