@@ -6,8 +6,8 @@ script_dir="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 cd "$script_dir/.."
 echo "Project Directory:  $(pwd)"
 
-julia --project=. -e 'using JuliaFormatter, TimestampedPaths;
-format("./src")
-format("./test")
+julia --project=. -e '
+using Pkg, TimestampedPaths;
+Pkg.test("TimestampedPaths")
 '
 

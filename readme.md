@@ -14,7 +14,7 @@ Pkg.add(url = "https://github.com/ashley/TimestampedPaths.jl")
 Each generated path is composed of four pieces:
 
 1. **Root directory** – `config.root_dir`, expanded with `~` if present.
-2. **Date folder** – formatted with `config.date_folder` (defaults to `"yyyy_mmdd"`). Set to `nothing` to skip the date layer.
+2. **Date folder** – formatted with `config.date_folder` (defaults to `"yyyy_mmdd"`). 
 3. **Optional collection folder** – only present when `config.collection_folder` is a string. The name is `"<collection_folder>_<index>"` where the index is zero-padded to `config.width_of_collection_index`.
 4. **Filename** – `Dates.format(now, config.file_timestamp) * config.pre_tag * tag * config.post_tag`. The `tag` argument is supplied when you request a path, and the timestamp can be cached for follow-up files.
 
@@ -50,6 +50,27 @@ This will create any missing directories and return a full path such as
 
 ### Reusing timestamps within a collection
 
+When using a collection\_folder, each "run" can be in a new indexed folder, eg
+capture\_01, capture\_02, capture\_03
+Sometimes it makes sense for all files in these folders to share a timestamp.
+In this senario it may make sense to scan the folder to pick the next index, 
+and cache the current timestamp before storing files. 
+
+```julia
+# At the end of a collection
+namer.cache_datetime_and_set_next_collection_index()
+namer.generate_path_with_cached_timestamp("data.dat")
+namer.generate_path_with_cached_timestamp("meta_data.json")
+namer.generate_path_with_cached_timestamp("plot.png")
+```
+
+
+If needed, `namer.cache_datetime_and_set_next_collection_index()` can be 
+broken into `namer.scan_and_set_next_collection_index()`
+and `namer.update_cached_date()`
+
+
+
 `generate_path_with_cached_timestamp` keeps the most recent timestamp so related files share the same prefix.
 
 ```julia
@@ -57,9 +78,18 @@ first = namer.generate_path("raw")
 second = namer.generate_path_with_cached_timestamp("metadata")
 ```
 
+Or equivelently:
+```julia
+namer.update_cached_date()
+first = namer.generate_path_with_cached_timestamp("raw")
+second = namer.generate_path_with_cached_timestamp("metadata")
+```
+
 ### Managing collection indices
 
-`NamerState` tracks `folder_index`. Call `namer.increment_collection_index()` to advance manually, or `namer.scan_and_set_collection_index()` to rescan the filesystem and resume after the highest existing suffix. Construction performs one scan automatically when a collection folder is configured.
+`NamerState` tracks `folder_index`. Call `namer.increment_collection_index()` to advance manually, or `namer.scan_and_set_next_collection_index()` to rescan the filesystem and resume after the highest existing suffix. Construction performs one scan automatically when a collection folder is configured.
+
+
 
 ## Configuration reference
 

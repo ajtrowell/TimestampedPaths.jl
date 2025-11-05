@@ -131,8 +131,10 @@ $(TYPEDFIELDS)
         )
     "Manually advance collection folder index"
     increment_collection_index = () -> state.folder_index += 1
-    ""
-    scan_and_set_collection_index = () -> set_next_collection_index!(state, config)
+    "Scan collection folders and select next index"
+    scan_and_set_next_collection_index = () -> set_next_collection_index!(state, config)
+    "Update cached date in state."
+    update_cached_date = () -> update_cached_date(state)
 end
 
 
@@ -236,7 +238,12 @@ function update_cached_date_and_index!(state::NamerState, config::NamerConfig)
     state.recent_datetime = datetime
     folder_index = set_next_collection_index!(state, config)
     return (; datetime, folder_index) # Status only.
+end
 
+"update_cached_date(state) just before using cached date."
+function update_cached_date(state::NamerState)
+    datetime = Dates.now()
+    state.recent_datetime = datetime
 end
 
 
@@ -375,30 +382,77 @@ end
 
 
 function api_demo()
-    pathgen::NamerInterface = NamerInterface()
+
+    namer_config = NamerConfig(
+        root_dir = "./demo_data/",
+        pre_tag = "_pc1_",
+        post_tag = "", # suffix, eg an extensions
+        collection_folder = nothing,
+    )
+
+    pathgen::NamerInterface = NamerInterface(config = namer_config)
     println("PWD: $(pwd())")
-    pathgen.config.root_dir = "./demo_data/"
-    pathgen.config.pre_tag = "_pretag_"
-    pathgen.config.post_tag = ""
-    pathgen.config.collection_folder = nothing
-    set_next_collection_index!(pathgen)
+    # Run if root_dir changed since NamerInterface construction.
+    # So, a new scan is required in case the new folder has indices already.
+    # set_next_collection_index!(pathgen)
 
     # println("NamerInterface:")
     show(pathgen)
 
+    # Basic collection, just time stamped files.
     files = String[]
     push!(files, pathgen.generate_path("data_collect.dat"))
     sleep(2)
-    push!(files, pathgen.generate_path_with_cached_timestamp("meta_data.json"))
+    push!(files, pathgen.generate_path("meta_data.json"))
 
-    @info "Starting collection_folder"
+
+    # More advanced setup: Starting collection_folder
     pathgen.config.collection_folder = "collection"
-    push!(files, pathgen.generate_path("data_collect.dat"))
+    # At start of an event, cache datetime nd scan for 
+    # next collection folder index
+    pathgen.cache_datetime_and_set_next_collection_index()
+    push!(files, pathgen.generate_path_with_cached_timestamp("data_collect.dat"))
     sleep(1)
-    push!(files, pathgen.generate_path("data_collect.dat"))
+    push!(files, pathgen.generate_path_with_cached_timestamp("meta_data.json"))
     sleep(1)
-    pathgen.increment_collection_index()
-    push!(files, pathgen.generate_path("data_collect.dat"))
+    push!(files, pathgen.generate_path_with_cached_timestamp("screenshot.png"))
+
+    sleep(3)
+    # next collection starts here
+    pathgen.cache_datetime_and_set_next_collection_index()
+    push!(files, pathgen.generate_path_with_cached_timestamp("data_collect.dat"))
+    sleep(1)
+    push!(files, pathgen.generate_path_with_cached_timestamp("meta_data.json"))
+    sleep(1)
+    push!(files, pathgen.generate_path_with_cached_timestamp("screenshot.png"))
+
+    # Advanced usage... multiple systems targeting same folder.
+    # For two agent test
+    pathgen2 = NamerInterface(config = deepcopy(namer_config))
+    pathgen2.config.pre_tag = "_pc2_"
+    @assert !(pathgen.config === pathgen2.config) "p1 and p2 configs are linked."
+    # If they are writing to a shared directory, we need to 
+    # make sure they aren't checking for the latest directory 
+    # while another is creating one, IF we want them to be 
+    # able to write to the same collection folder.
+    pathgen.scan_and_set_next_collection_index()
+    pathgen2.scan_and_set_next_collection_index()
+    sleep(1) # Start collection
+
+    # Now run an event. Event is done, lets cache 
+    # the current time to use for naming all output files.
+    pathgen.update_cached_date()
+    pathgen2.update_cached_date()
+
+    for gen in [pathgen, pathgen2]
+
+        push!(files, gen.generate_path_with_cached_timestamp("data.dat"))
+        sleep(1)
+        push!(files, gen.generate_path_with_cached_timestamp("meta.json"))
+        sleep(1)
+        push!(files, gen.generate_path_with_cached_timestamp("image.png"))
+    end
+
 
     # Display and save
     for file in files
@@ -414,4 +468,6 @@ function api_demo()
 
     other_next_index = find_next_collection_index(pathgen.config)
     @info "Other Next Index: $(other_next_index)"
+
+
 end

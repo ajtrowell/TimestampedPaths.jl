@@ -15,11 +15,8 @@
             date_folder = Dates.format(dt, ni.config.date_folder)
             file_prefix = Dates.format(dt, ni.config.file_timestamp)
 
-            expected_path = joinpath(
-                tmp,
-                date_folder,
-                file_prefix * "pre_" * "tag" * "_post.dat",
-            )
+            expected_path =
+                joinpath(tmp, date_folder, file_prefix * "pre_" * "tag" * "_post.dat")
             @test path == expected_path
             @test isdir(dirname(path))
 
@@ -90,7 +87,7 @@
 
             current_date_folder_path = TimestampedPaths.get_date_folder_path(cfg)
             mkpath(joinpath(current_date_folder_path, "collection_010"))
-            ni.scan_and_set_collection_index()
+            ni.scan_and_set_next_collection_index()
             @test ni.state.folder_index == 11
         end
     end
